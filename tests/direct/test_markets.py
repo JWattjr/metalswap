@@ -216,3 +216,10 @@ def test_market_opening_is_owner_only_and_bounded(
             "2025-01-02T00:00:00Z",
             f"https://metal-swap.vercel.app/evidence/{far_identifier}.json",
         )
+
+    direct_vm.sender = direct_alice
+    with direct_vm.expect_revert("owner authorization required"):
+        market.open_next_market()
+
+    direct_vm.sender = direct_owner
+    assert market.open_next_market() == market_id("2025-01-01T00:15:00Z")

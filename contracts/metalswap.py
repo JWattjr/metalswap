@@ -659,6 +659,7 @@ class MetalSwap(gl.Contract):
 
     @gl.public.write
     def open_next_market(self) -> str:
+        self._require_owner()
         now = self._transaction_time()
         start_at = self._next_quarter_hour(now)
         market_id = self._market_id(start_at)
@@ -933,6 +934,7 @@ class MetalSwap(gl.Contract):
     @gl.public.view
     def get_protocol_config(self) -> dict:
         return {
+            "owner": self.owner.as_hex,
             "fee_bps": FEE_BPS,
             "fee_percent_display": "2%",
             "market_seconds": MARKET_SECONDS,

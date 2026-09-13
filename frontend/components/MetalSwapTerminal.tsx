@@ -363,7 +363,13 @@ export default function MetalSwapTerminal() {
   const currentCountdown = countdown(intervalEnd.valueOf(), referenceNow);
   const entryCountdown = countdown(activeStart.valueOf(), referenceNow);
   const entryIsOpen = Boolean(entryMarket && referenceNow < activeStart.valueOf());
+  const walletIsMarketOperator = Boolean(
+    walletAddress
+      && protocolConfig.owner
+      && walletAddress.toLowerCase() === protocolConfig.owner.toLowerCase(),
+  );
   const contractCanOpenNext = mode === "contract"
+    && walletIsMarketOperator
     && !contractEntryMarket
     && ["AWAITING_SETTLEMENT", "PENDING_EVIDENCE", "AWAITING_FINALITY", "CLAIMABLE", "REFUND"].includes(contractMarket?.status ?? "");
   const entryStatusLabel = mode === "local"

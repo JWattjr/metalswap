@@ -22,9 +22,9 @@ Useful read-only commands:
 
 ```powershell
 genlayer network set studionet
-genlayer call 0x1Ad6b4643DCd04AA774a0AD3305c7d3F555EfDDc get_current_market
-genlayer call 0x1Ad6b4643DCd04AA774a0AD3305c7d3F555EfDDc get_protocol_config
-genlayer call 0x85481500d587A29b523c512FCB7fbCc347FC28a9 get_gate_status
+genlayer call 0xB615a841A33e79CC9EDB67D7dcf7C42eEeE0ce7E get_current_market
+genlayer call 0xB615a841A33e79CC9EDB67D7dcf7C42eEeE0ce7E get_protocol_config
+genlayer call 0x88862E86176887CE7fc611EEe3105b00eCcaac17 get_gate_status
 ```
 
 Do not record a market as claimable from an `ACCEPTED` receipt alone. The UI and contract both treat the `SettlementGate` record as the claim boundary.

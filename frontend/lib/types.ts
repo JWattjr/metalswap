@@ -96,6 +96,7 @@ export interface LocalPosition {
 }
 
 export interface ProtocolConfig {
+  owner?: string;
   fee_percent_display: string;
   max_settlement_attempts: ContractNumber;
   max_market_horizon_seconds?: ContractNumber;

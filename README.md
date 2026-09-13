@@ -93,6 +93,13 @@ Before calling a build testnet-ready, record:
 
 Portal submission is intentionally not automated by this project.
 
+For the linked Vercel project, deploy from the Next.js app directory so Vercel
+uses `frontend/.next` as its framework output:
+
+```powershell
+vercel --prod --yes --cwd frontend
+```
+
 The current observed addresses and finalized deployment receipts are recorded in [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md); the machine-readable readback is in `deploy/last-deployment.json`.
 
 ## Primary references
