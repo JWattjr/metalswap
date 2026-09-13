@@ -1,6 +1,6 @@
 import json
 
-from tests.direct.conftest import as_address, evidence_payload, fund_and_stake, open_market, settle_with
+from tests.direct.conftest import as_address, evidence_payload, fund_and_stake, market_id, open_market, settle_with
 
 
 def test_gold_outperforms_while_both_rise_and_payout_conserves_pool(
@@ -177,8 +177,42 @@ def test_claim_requires_finality_before_any_claim(
     )
     direct_vm.warp("2025-01-01T00:30:00Z")
     market_contract.request_settlement(identifier)
-    with direct_vm.expect_revert("finality gate is not configured"):
+    with direct_vm.expect_revert("settlement is not protocol-finalized"):
         market_contract.claim_position(identifier, "GOLD")
 
     # A wired market's finality record is applied in settle_with; this test
     # keeps the explicit gating failure above separate from the success path.
+
+
+def test_market_opening_is_owner_only_and_bounded(
+    direct_vm, direct_deploy, direct_owner, direct_alice, direct_bob
+):
+    market = direct_deploy("contracts/metalswap.py")
+    identifier = market_id("2025-01-01T00:15:00Z")
+    direct_vm.warp("2025-01-01T00:00:00Z")
+
+    direct_vm.sender = direct_alice
+    with direct_vm.expect_revert("owner authorization required"):
+        market.open_market(
+            identifier,
+            "2025-01-01T00:15:00Z",
+            f"https://metal-swap.vercel.app/evidence/{identifier}.json",
+        )
+
+    direct_vm.sender = direct_owner
+    with direct_vm.expect_revert("market setup is incomplete"):
+        market.open_market(
+            identifier,
+            "2025-01-01T00:15:00Z",
+            f"https://metal-swap.vercel.app/evidence/{identifier}.json",
+        )
+
+    market.configure_finality_gate(as_address(direct_bob))
+    market.configure_source_base_url("https://metal-swap.vercel.app/evidence/")
+    far_identifier = market_id("2025-01-02T00:00:00Z")
+    with direct_vm.expect_revert("market start is too far in the future"):
+        market.open_market(
+            far_identifier,
+            "2025-01-02T00:00:00Z",
+            f"https://metal-swap.vercel.app/evidence/{far_identifier}.json",
+        )

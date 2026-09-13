@@ -156,9 +156,13 @@ def evidence_payload(
 
 
 @pytest.fixture
-def market_contract(direct_deploy):
+def market_contract(direct_deploy, direct_vm, direct_owner, direct_bob):
     reset_known_contract()
-    return direct_deploy("contracts/metalswap.py")
+    contract = direct_deploy("contracts/metalswap.py")
+    direct_vm.sender = direct_owner
+    contract.configure_finality_gate(as_address(direct_bob))
+    contract.configure_source_base_url("https://metal-swap.vercel.app/evidence/")
+    return contract
 
 
 @pytest.fixture

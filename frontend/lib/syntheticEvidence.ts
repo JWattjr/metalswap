@@ -12,17 +12,51 @@ function hashPayload(value: Record<string, unknown>): string {
   return `sha256:${createHash("sha256").update(canonicalJson(value), "utf8").digest("hex")}`;
 }
 
-function parseMarketId(marketId: string): string | null {
+export function parseSyntheticMarketStart(marketId: string): string | null {
   const match = /^market-(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)$/.exec(marketId);
   return match?.[1] ?? null;
 }
 
-export function makeSyntheticEvidence(marketId: string, origin: string) {
-  const start = parseMarketId(marketId);
+function marketWindow(marketId: string): { start: string; end: string; startDate: Date } | null {
+  const start = parseSyntheticMarketStart(marketId);
   if (!start) return null;
   const startDate = new Date(start);
   if (Number.isNaN(startDate.valueOf()) || startDate.getUTCMinutes() % 15 !== 0 || startDate.getUTCSeconds() !== 0) return null;
   const end = new Date(startDate.valueOf() + 900_000).toISOString().replace(".000Z", "Z");
+  return { start, end, startDate };
+}
+
+export function makePendingSyntheticEvidence(marketId: string, origin: string) {
+  const window = marketWindow(marketId);
+  if (!window) return null;
+  return {
+    schema_version: EVIDENCE_SCHEMA_VERSION,
+    status: "PENDING_EVIDENCE",
+    market_id: marketId,
+    source_id: SYNTHETIC_SOURCE_ID,
+    evidence_url: `${origin.replace(/\/$/, "")}/evidence/${marketId}.json`,
+    currency: "USD",
+    unit: "USD_PER_TROY_OUNCE",
+    selection_rule: SELECTION_RULE,
+    max_gap_seconds: 0,
+    max_skew_seconds: 0,
+    gold_opening_timestamp: "",
+    gold_opening_price: 0,
+    gold_closing_timestamp: "",
+    gold_closing_price: 0,
+    silver_opening_timestamp: "",
+    silver_opening_price: 0,
+    silver_closing_timestamp: "",
+    silver_closing_price: 0,
+    evidence_hash: "",
+    reason_code: "EVIDENCE_NOT_AVAILABLE",
+  };
+}
+
+export function makeSyntheticEvidence(marketId: string, origin: string) {
+  const window = marketWindow(marketId);
+  if (!window) return null;
+  const { start, end, startDate } = window;
   const seed = startDate.getUTCHours() * 4 + startDate.getUTCMinutes() / 15;
   const evidenceUrl = `${origin.replace(/\/$/, "")}/evidence/${marketId}.json`;
   const payload = {

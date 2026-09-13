@@ -1,0 +1,42 @@
+import { expect, test } from "@playwright/test";
+
+test("walletless visitors can choose an explicit local replay", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Gold vs Silver" })).toBeVisible();
+  await expect(page.getByText("Synthetic evidence demo")).toBeVisible();
+
+  await page.getByRole("button", { name: "Start local replay" }).first().click();
+
+  await expect(page.getByRole("button", { name: "Exit local replay" })).toBeVisible();
+  await expect(page.locator(".entry-status")).toContainText("OPEN");
+  await expect(page.getByRole("button", { name: /Place (GOLD|SILVER) position/ })).toBeVisible();
+});
+
+test("entry landmark and quick stake controls remain accessible", async ({ page }) => {
+  await page.goto("/");
+  const entryPanel = page.locator('aside[aria-labelledby="entry-heading"]');
+  await expect(entryPanel).toHaveCount(1);
+  await expect(page.locator("#entry-heading")).toHaveCount(1);
+
+  for (const amount of ["10", "25", "50", "100"]) {
+    await expect(page.getByRole("button", { name: amount, exact: true })).toHaveCSS("min-height", "44px");
+  }
+});
+
+test("future synthetic evidence is withheld until the market closes", async ({ request }) => {
+  const response = await request.get("/evidence/market-2030-01-01T00:00:00Z.json");
+  expect(response.ok()).toBeTruthy();
+  const evidence = await response.json();
+  expect(evidence.status).toBe("PENDING_EVIDENCE");
+  expect(evidence.reason_code).toBe("EVIDENCE_NOT_AVAILABLE");
+  expect(evidence.outcome).toBeUndefined();
+  expect(evidence.gold_closing_price).toBe(0);
+});
+
+test("closed historical synthetic evidence still has a canonical record", async ({ request }) => {
+  const response = await request.get("/evidence/market-2020-01-01T00:00:00Z.json");
+  expect(response.ok()).toBeTruthy();
+  const evidence = await response.json();
+  expect(evidence.status).toBe("FINALIZED");
+  expect(evidence.evidence_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
+});

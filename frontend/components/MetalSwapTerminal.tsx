@@ -17,27 +17,53 @@ import {
   ShieldCheck,
   WalletCards,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   GENLAYER_RPC_URL,
-  METALSWAP_ADDRESS,
   NETWORK_NAME,
+  WrongNetworkError,
+  assertWalletNetwork,
+  getExpectedChainId,
+  getConfiguredChain,
   hasDeployment,
+  normalizeContractValue,
   readContract,
+  switchToConfiguredNetwork,
+  waitForFinalizedTransaction,
   writeContract,
 } from "@/lib/genlayer";
-import type { ContractAccount, ContractMarket, LocalPosition, ProtocolConfig, Side, TransactionState } from "@/lib/types";
-import { connectWallet, getConnectedAccount, shortAddress } from "@/lib/wallet";
+import type {
+  ChainPositionView,
+  ContractAccount,
+  ContractMarket,
+  ContractNumber,
+  ContractPosition,
+  ClaimQuote,
+  LocalPosition,
+  ProtocolConfig,
+  Side,
+  TransactionState,
+} from "@/lib/types";
+import {
+  connectWallet,
+  getConnectedAccount,
+  getWalletChainId,
+  hasWalletProvider,
+  shortAddress,
+  subscribeToWalletEvents,
+  walletEventAccount,
+} from "@/lib/wallet";
 
 const GOLD = "GOLD" as const;
 const SILVER = "SILVER" as const;
+const U256_MAX = (1n << 256n) - 1n;
 
 type SessionMode = "idle" | "local" | "contract";
 
 interface PoolState {
-  GOLD: number;
-  SILVER: number;
+  GOLD: bigint;
+  SILVER: bigint;
 }
 
 interface ChartPoint {
@@ -49,12 +75,14 @@ interface ChartPoint {
 const demoConfig: ProtocolConfig = {
   fee_percent_display: "2%",
   max_settlement_attempts: 3,
+  max_market_horizon_seconds: 1_800,
   settlement_grace_seconds: 600,
   max_gap_seconds: 180,
   max_skew_seconds: 60,
   price_scale: 1_000_000,
   source_id: "metalswap-synthetic-evidence-v1",
   source_base_url: "/evidence/",
+  source_base_configured: false,
   evidence_schema_version: "metalswap-evidence-v1",
   rule_version: "relative-return-cross-multiplication-v1",
   selection_rule: "exact_boundary_observation",
@@ -94,17 +122,19 @@ function marketId(start: Date): string {
   return `market-${isoUtc(start)}`;
 }
 
-function formatUtc(date: Date, withSeconds = false): string {
-  return new Intl.DateTimeFormat("en-GB", {
+function formatUtc(date: Date | null, withSeconds = false): string {
+  if (!date || Number.isNaN(date.valueOf())) return "—";
+  return `${new Intl.DateTimeFormat("en-GB", {
     timeZone: "UTC",
     hour: "2-digit",
     minute: "2-digit",
     ...(withSeconds ? { second: "2-digit" } : {}),
     hour12: false,
-  }).format(date) + " UTC";
+  }).format(date)} UTC`;
 }
 
-function formatDateUtc(date: Date): string {
+function formatDateUtc(date: Date | null): string {
+  if (!date || Number.isNaN(date.valueOf())) return "—";
   return new Intl.DateTimeFormat("en-GB", {
     timeZone: "UTC",
     day: "2-digit",
@@ -113,9 +143,25 @@ function formatDateUtc(date: Date): string {
   }).format(date);
 }
 
-function formatCredits(value: number | null | undefined): string {
-  if (value === null || value === undefined || Number.isNaN(value)) return "—";
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(value);
+function toBigInt(value: ContractNumber | null | undefined): bigint | null {
+  if (value === null || value === undefined || value === "") return null;
+  try {
+    return typeof value === "bigint" ? value : BigInt(value);
+  } catch {
+    return null;
+  }
+}
+
+function toSafeNumber(value: ContractNumber | null | undefined, fallback = 0): number {
+  const amount = toBigInt(value);
+  if (amount === null || amount > BigInt(Number.MAX_SAFE_INTEGER)) return fallback;
+  return Number(amount);
+}
+
+function formatCredits(value: ContractNumber | null | undefined): string {
+  const amount = toBigInt(value);
+  if (amount === null) return "—";
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 }).format(amount);
 }
 
 function formatPrice(value: number): string {
@@ -159,10 +205,6 @@ function chartPoints(series: ChartPoint[], key: "gold" | "silver"): string {
   }).join(" ");
 }
 
-function normalizeRecord<T>(value: unknown): T {
-  return value as T;
-}
-
 function statusLabel(status: string | undefined): string {
   if (!status) return "READING MARKET";
   return status.replaceAll("_", " ");
@@ -174,24 +216,63 @@ function explorerLink(hash: string): string | null {
   return base ? `${base.replace(/\/$/, "")}/tx/${hash}` : null;
 }
 
+function parseStake(value: string): { amount: bigint | null; error: string } {
+  if (!value.trim()) return { amount: null, error: "Enter a whole-number stake." };
+  if (!/^\d+$/.test(value)) return { amount: null, error: "Stake must be a whole number of demo credits." };
+  try {
+    const amount = BigInt(value);
+    if (amount <= 0n) return { amount: null, error: "Stake must be greater than zero." };
+    if (amount > U256_MAX) return { amount: null, error: "Stake is larger than the contract limit." };
+    return { amount, error: "" };
+  } catch {
+    return { amount: null, error: "Enter a valid whole-number stake." };
+  }
+}
+
+function dateFrom(value: string | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.valueOf()) ? null : parsed;
+}
+
+function isAfter(value: string | undefined, referenceNow: number): boolean {
+  const date = dateFrom(value);
+  return Boolean(date && date.valueOf() <= referenceNow);
+}
+
+function record<T>(value: unknown): T {
+  return normalizeContractValue(value) as T;
+}
+
+function rawList(value: unknown, key: string): unknown[] {
+  if (!value || typeof value !== "object") return [];
+  const candidate = (value as Record<string, unknown>)[key];
+  return Array.isArray(candidate) ? candidate : [];
+}
+
 export default function MetalSwapTerminal() {
   const [nowMs, setNowMs] = useState(0);
   const [mode, setMode] = useState<SessionMode>("idle");
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  const [localBalance, setLocalBalance] = useState<number | null>(null);
-  const [localPools, setLocalPools] = useState<PoolState>({ GOLD: 0, SILVER: 0 });
-  const [positions, setPositions] = useState<LocalPosition[]>([]);
+  const [localBalance, setLocalBalance] = useState<bigint | null>(null);
+  const [localPools, setLocalPools] = useState<PoolState>({ GOLD: 0n, SILVER: 0n });
+  const [localPositions, setLocalPositions] = useState<LocalPosition[]>([]);
+  const [contractPositions, setContractPositions] = useState<ChainPositionView[]>([]);
   const [selectedSide, setSelectedSide] = useState<Side>(SILVER);
-  const [stakeAmount, setStakeAmount] = useState(25);
+  const [stakeAmount, setStakeAmount] = useState("25");
   const [txState, setTxState] = useState<TransactionState>("IDLE");
   const [txHash, setTxHash] = useState("");
+  const [txLabel, setTxLabel] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [statusMessage, setStatusMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [contractMarket, setContractMarket] = useState<ContractMarket | null>(null);
   const [contractAccount, setContractAccount] = useState<ContractAccount | null>(null);
   const [protocolConfig, setProtocolConfig] = useState<ProtocolConfig>(demoConfig);
   const [contractReadError, setContractReadError] = useState("");
+  const [wrongNetwork, setWrongNetwork] = useState(false);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     const tick = () => setNowMs(Date.now());
@@ -200,18 +281,61 @@ export default function MetalSwapTerminal() {
     return () => window.clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
-    getConnectedAccount().then((address) => {
-      if (!cancelled && address) {
-        setWalletAddress(address);
-        setMode(hasDeployment() ? "contract" : "local");
-      }
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
+  const syncWallet = useCallback(async () => {
+    const address = await getConnectedAccount();
+    if (!address) return;
+    setWalletAddress(address);
+    setMode(hasDeployment() ? "contract" : "local");
+    if (!hasDeployment()) setLocalBalance((value) => value ?? 1_000n);
   }, []);
 
-  const referenceNow = nowMs || Date.parse("2026-09-13T08:14:00Z");
+  useEffect(() => {
+    let cancelled = false;
+    syncWallet().catch(() => undefined);
+    const unsubscribe = subscribeToWalletEvents({
+      accountsChanged: (value) => {
+        if (cancelled) return;
+        const address = walletEventAccount(value);
+        setContractAccount(null);
+        setContractPositions([]);
+        setTxState("IDLE");
+        setTxHash("");
+        if (!address) {
+          setWalletAddress(null);
+          setMode("idle");
+          return;
+        }
+        setWalletAddress(address);
+        setMode(hasDeployment() ? "contract" : "local");
+        if (!hasDeployment()) setLocalBalance((value) => value ?? 1_000n);
+      },
+      chainChanged: () => {
+        getWalletChainId().then((chainId) => {
+          if (cancelled) return;
+          const matches = chainId === getExpectedChainId();
+          setWrongNetwork(!matches);
+          setContractAccount(null);
+          setContractPositions([]);
+          if (matches) {
+            setErrorMessage("");
+            setStatusMessage("Wallet is back on the configured GenLayer network.");
+          } else {
+            setErrorMessage(`Wallet network changed. Switch to ${getConfiguredChain().name} (chain ${getExpectedChainId()}) before writing.`);
+          }
+        }).catch(() => {
+          if (!cancelled) setWrongNetwork(true);
+        });
+      },
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, [syncWallet]);
+
+  // Keep the first server/client render identical; the clock effect below
+  // immediately replaces the epoch placeholder after hydration.
+  const referenceNow = nowMs;
   const currentStart = useMemo(() => quarterFloor(new Date(referenceNow)), [referenceNow]);
   const currentEnd = useMemo(() => addMinutes(currentStart, 15), [currentStart]);
   const upcomingStart = currentEnd;
@@ -222,67 +346,138 @@ export default function MetalSwapTerminal() {
   const chartSilver = chartSeries[chartSeries.length - 1].silver - 100;
   const provisionalLeader: Side = chartGold >= chartSilver ? GOLD : SILVER;
 
-  const contractEntryMarket = contractMarket?.status === "UPCOMING" ? contractMarket : null;
-  const activeMarketId = contractEntryMarket?.market_id || upcomingMarketId;
-  const activeStart = contractEntryMarket?.start_at ? new Date(contractEntryMarket.start_at) : upcomingStart;
-  const activeEnd = contractEntryMarket?.end_at ? new Date(contractEntryMarket.end_at) : upcomingEnd;
-  const intervalStart = contractMarket?.start_at ? new Date(contractMarket.start_at) : currentStart;
-  const intervalEnd = contractMarket?.end_at ? new Date(contractMarket.end_at) : currentEnd;
+  const contractEntryMarket = mode === "contract" && contractMarket?.status === "UPCOMING" ? contractMarket : null;
+  const localEntryMarket = mode === "local" ? {
+    market_id: upcomingMarketId,
+    start_at: upcomingStart.toISOString(),
+    end_at: upcomingEnd.toISOString(),
+    status: "UPCOMING",
+  } satisfies ContractMarket : null;
+  const entryMarket = contractEntryMarket ?? localEntryMarket;
+  const entryContextMarket = mode !== "local" && contractMarket?.exists !== false ? contractMarket : entryMarket;
+  const activeMarketId = entryMarket?.market_id ?? upcomingMarketId;
+  const activeStart = dateFrom(entryMarket?.start_at) ?? upcomingStart;
+  const activeEnd = dateFrom(entryMarket?.end_at) ?? upcomingEnd;
+  const intervalStart = dateFrom(mode !== "local" ? contractMarket?.start_at : localEntryMarket?.start_at) ?? currentStart;
+  const intervalEnd = dateFrom(mode !== "local" ? contractMarket?.end_at : localEntryMarket?.end_at) ?? currentEnd;
   const currentCountdown = countdown(intervalEnd.valueOf(), referenceNow);
   const entryCountdown = countdown(activeStart.valueOf(), referenceNow);
-  const entryStatusLabel = mode === "contract" && contractMarket && !contractEntryMarket
-    ? "WAITING FOR NEXT MARKET"
-    : "OPEN";
+  const entryIsOpen = Boolean(entryMarket && referenceNow < activeStart.valueOf());
+  const contractCanOpenNext = mode === "contract"
+    && !contractEntryMarket
+    && ["AWAITING_SETTLEMENT", "PENDING_EVIDENCE", "AWAITING_FINALITY", "CLAIMABLE", "REFUND"].includes(contractMarket?.status ?? "");
+  const entryStatusLabel = mode === "local"
+    ? "OPEN"
+    : contractEntryMarket
+      ? "OPEN"
+      : mode === "contract"
+        ? contractMarket?.status === "LIVE" ? "ENTRY CLOSED" : "WAITING FOR NEXT MARKET"
+        : hasDeployment() ? "CONNECT TO ENTER" : "REPLAY AVAILABLE";
+  const entryHeadingLabel = mode === "local" || contractEntryMarket ? "UPCOMING MARKET" : "MARKET ACCESS";
   const contractPools: PoolState = {
-    GOLD: contractEntryMarket?.gold_pool ?? 0,
-    SILVER: contractEntryMarket?.silver_pool ?? 0,
+    GOLD: toBigInt(contractEntryMarket?.gold_pool) ?? 0n,
+    SILVER: toBigInt(contractEntryMarket?.silver_pool) ?? 0n,
   };
   const poolStateKnown = mode === "local" || contractEntryMarket !== null;
   const pools = mode === "local" ? localPools : contractPools;
   const totalPool = pools.GOLD + pools.SILVER;
+  const parsedStake = parseStake(stakeAmount);
+  const stakeError = parsedStake.error;
+  const stakeValue = parsedStake.amount ?? 0n;
   const opposingPool = pools[selectedSide === GOLD ? SILVER : GOLD];
   const selectedPool = pools[selectedSide];
-  const projectedPool = selectedPool + stakeAmount + opposingPool;
-  const projectedFee = opposingPool > 0 ? Math.floor(projectedPool * 0.02) : 0;
-  const estimatedPayout = opposingPool > 0
-    ? Math.floor((projectedPool - projectedFee) * stakeAmount / (selectedPool + stakeAmount))
-    : stakeAmount;
-  const walletBalance = mode === "contract" ? (contractAccount?.demo_balance ?? null) : localBalance;
+  const projectedPool = selectedPool + stakeValue + opposingPool;
+  const projectedFee = opposingPool > 0n ? (projectedPool * 20n) / 1_000n : 0n;
+  const estimatedPayout = opposingPool > 0n && selectedPool + stakeValue > 0n
+    ? ((projectedPool - projectedFee) * stakeValue) / (selectedPool + stakeValue)
+    : stakeValue;
+  const walletBalance = mode === "contract" ? toBigInt(contractAccount?.demo_balance) : localBalance;
   const hasActiveSession = mode !== "idle" && Boolean(walletAddress);
-  const isEntryOpen = (mode !== "contract" || contractEntryMarket !== null) && referenceNow < activeStart.valueOf();
-  const canPlace = hasActiveSession && isEntryOpen && stakeAmount > 0 && (walletBalance === null || walletBalance >= stakeAmount) && txState !== "SUBMITTED";
-  const displayStatus = contractMarket?.status || (isEntryOpen ? "UPCOMING" : referenceNow < activeEnd.valueOf() ? "LIVE" : "AWAITING_SETTLEMENT");
+  const txBusy = txState === "SUBMITTED" || txState === "PROVISIONAL";
+  const isEntryOpen = entryIsOpen && (mode === "local" || mode === "contract");
+  const canPlacePosition = hasActiveSession
+    && isEntryOpen
+    && !stakeError
+    && stakeValue > 0n
+    && (walletBalance === null || walletBalance >= stakeValue)
+    && !wrongNetwork
+    && !txBusy;
+  const displayStatus = mode === "local"
+    ? (isEntryOpen ? "UPCOMING" : referenceNow < activeEnd.valueOf() ? "LIVE" : "AWAITING_SETTLEMENT")
+    : contractMarket?.status || (hasDeployment() ? "READING MARKET" : "SYNTHETIC REPLAY");
 
-  async function refreshContract() {
+  const refreshContract = useCallback(async () => {
     if (!hasDeployment()) return;
-    setIsRefreshing(true);
-    setContractReadError("");
-    try {
-      const [marketValue, configValue] = await Promise.all([
-        readContract("get_current_market"),
-        readContract("get_protocol_config"),
-      ]);
-      setContractMarket(normalizeRecord<ContractMarket>(marketValue));
-      setProtocolConfig({ ...demoConfig, ...normalizeRecord<ProtocolConfig>(configValue) });
-      if (walletAddress && mode === "contract") {
-        const accountValue = await readContract("get_account", [walletAddress]);
-        setContractAccount(normalizeRecord<ContractAccount>(accountValue));
+    if (refreshInFlight.current) return refreshInFlight.current;
+    const task = (async () => {
+      setIsRefreshing(true);
+      setContractReadError("");
+      try {
+        const [marketValue, configValue] = await Promise.all([
+          readContract("get_current_market"),
+          readContract("get_protocol_config"),
+        ]);
+        const market = record<ContractMarket>(marketValue);
+        setContractMarket(market);
+        setProtocolConfig({ ...demoConfig, ...record<ProtocolConfig>(configValue) });
+        if (walletAddress && mode === "contract") {
+          await assertWalletNetwork();
+          setWrongNetwork(false);
+          const [accountValue, positionsValue] = await Promise.all([
+            readContract("get_account", [walletAddress]),
+            readContract("get_user_positions", [walletAddress, 0n, 50n]),
+          ]);
+          const account = record<ContractAccount>(accountValue);
+          const rawPositions = rawList(positionsValue, "positions").map((value) => record<ContractPosition>(value));
+          const enriched = await Promise.all(rawPositions.map(async (position): Promise<ChainPositionView> => {
+            if (!position.market_id || !position.side) return { position, market: null, quote: null };
+            try {
+              const [positionMarket, quoteValue] = await Promise.all([
+                readContract("get_market", [position.market_id]),
+                readContract("get_claim_quote", [position.market_id, walletAddress, position.side]),
+              ]);
+              return {
+                position,
+                market: record<ContractMarket>(positionMarket),
+                quote: record<ClaimQuote>(quoteValue),
+              };
+            } catch {
+              return { position, market: null, quote: null };
+            }
+          }));
+          setContractAccount(account);
+          setContractPositions(enriched);
+        } else if (mode !== "contract") {
+          setContractAccount(null);
+          setContractPositions([]);
+        }
+      } catch (error) {
+        if (error instanceof WrongNetworkError) {
+          setWrongNetwork(true);
+          setContractAccount(null);
+          setContractPositions([]);
+          setErrorMessage(error.message);
+        } else {
+          setContractReadError(error instanceof Error ? error.message : "GenLayer read failed. Try refreshing.");
+        }
+      } finally {
+        setIsRefreshing(false);
       }
-    } catch (error) {
-      setContractReadError(error instanceof Error ? error.message : "GenLayer read failed. Try refreshing.");
+    })();
+    refreshInFlight.current = task;
+    try {
+      await task;
     } finally {
-      setIsRefreshing(false);
+      if (refreshInFlight.current === task) refreshInFlight.current = null;
     }
-  }
+  }, [mode, walletAddress]);
 
   useEffect(() => {
     if (!hasDeployment()) return;
     refreshContract().catch(() => undefined);
     const timer = window.setInterval(() => refreshContract().catch(() => undefined), 30_000);
     return () => window.clearInterval(timer);
-    // Refreshes are intentionally bounded; the public read is not a stream.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletAddress, mode]);
+  }, [refreshContract]);
 
   function clearError() {
     setErrorMessage("");
@@ -291,10 +486,12 @@ export default function MetalSwapTerminal() {
 
   function startLocalReplay() {
     clearError();
+    setWrongNetwork(false);
     setMode("local");
     setWalletAddress("local-replay");
-    setLocalBalance((value) => value ?? 1_000);
+    setLocalBalance((value) => value ?? 1_000n);
     setTxState("IDLE");
+    setStatusMessage("Local replay started. These positions never leave this browser.");
   }
 
   async function handleConnect() {
@@ -303,61 +500,90 @@ export default function MetalSwapTerminal() {
       startLocalReplay();
       return;
     }
+    if (!hasWalletProvider()) {
+      setErrorMessage("Install MetaMask or choose the local replay.");
+      return;
+    }
     try {
+      await assertWalletNetwork();
       const address = await connectWallet();
+      await assertWalletNetwork();
       setWalletAddress(address);
       setMode("contract");
+      setWrongNetwork(false);
       setTxState("IDLE");
+      setStatusMessage(`Connected to ${shortAddress(address)} on ${getConfiguredChain().name}.`);
     } catch (error) {
+      if (error instanceof WrongNetworkError) setWrongNetwork(true);
       setErrorMessage(error instanceof Error ? error.message : "Wallet connection failed.");
     }
   }
 
-  async function runWrite(functionName: string, args: unknown[], label: string): Promise<boolean> {
+  async function handleSwitchNetwork() {
     clearError();
+    try {
+      await switchToConfiguredNetwork();
+      setWrongNetwork(false);
+      setStatusMessage(`Wallet switched to ${getConfiguredChain().name}.`);
+      await syncWallet();
+    } catch (error) {
+      setWrongNetwork(true);
+      setErrorMessage(error instanceof Error ? error.message : "Network switch was cancelled.");
+    }
+  }
+
+  async function runWrite(functionName: string, args: unknown[], label: string): Promise<boolean> {
+    if (txBusy) return false;
+    clearError();
+    setTxLabel(label);
+    setTxHash("");
     setTxState("SUBMITTED");
+    setStatusMessage(`${label} submitted. Waiting for GenLayer protocol finality.`);
     try {
       const hash = await writeContract(functionName, args);
       setTxHash(hash);
-      setTxState("DECIDED");
+      await waitForFinalizedTransaction(hash, (progress) => {
+        setTxState(progress);
+        if (progress === "PROVISIONAL") setStatusMessage(`${label} accepted provisionally. Waiting for protocol finality.`);
+      });
+      setTxState("FINALIZED");
+      setStatusMessage(`${label} finalized successfully. State refreshed from the contract.`);
+      await refreshContract();
       return true;
     } catch (error) {
       setTxState("FAILED");
       setErrorMessage(`${label}: ${error instanceof Error ? error.message : "transaction failed"}`);
+      setStatusMessage(`${label} failed. No state change was assumed.`);
       return false;
     }
   }
 
   async function handleClaimCredits() {
     if (mode === "contract") {
-      const success = await runWrite("claim_demo_credits", [], "Demo credit request");
-      if (success) await refreshContract();
+      await runWrite("claim_demo_credits", [], "Demo credit request");
       return;
     }
     startLocalReplay();
   }
 
   async function handlePlacePosition() {
-    if (!canPlace) return;
+    if (!canPlacePosition) return;
     if (mode === "contract") {
-      const success = await runWrite("place_position", [activeMarketId, selectedSide, BigInt(stakeAmount)], "Position submission");
-      if (success) {
-        await refreshContract();
-      }
+      await runWrite("place_position", [activeMarketId, selectedSide, stakeValue], "Position submission");
       return;
     }
-    if (localBalance !== null && localBalance < stakeAmount) {
+    if (localBalance !== null && localBalance < stakeValue) {
       setErrorMessage("Your local replay balance is below this stake.");
       return;
     }
-    setLocalBalance((value) => (value ?? 1_000) - stakeAmount);
-    setLocalPools((value) => ({ ...value, [selectedSide]: value[selectedSide] + stakeAmount }));
-    setPositions((value) => [
+    setLocalBalance((value) => (value ?? 1_000n) - stakeValue);
+    setLocalPools((value) => ({ ...value, [selectedSide]: value[selectedSide] + stakeValue }));
+    setLocalPositions((value) => [
       {
         id: `${activeMarketId}-${selectedSide}-${Date.now()}`,
         marketId: activeMarketId,
         side: selectedSide,
-        stake: stakeAmount,
+        stake: stakeValue,
         status: "LOCAL_REPLAY",
         payout: null,
         enteredAt: new Date(referenceNow).toISOString(),
@@ -366,23 +592,31 @@ export default function MetalSwapTerminal() {
     ]);
     setTxHash("");
     setTxState("IDLE");
+    setStatusMessage(`${selectedSide} local replay position recorded for ${formatCredits(stakeValue)} credits.`);
   }
 
-  async function handleSettlement() {
-    if (!activeMarketId || referenceNow < activeEnd.valueOf()) return;
-    if (mode === "contract") {
-      await runWrite("request_settlement", [activeMarketId], "Settlement request");
-      return;
-    }
-    setErrorMessage("Local replay uses a synthetic evidence record; settlement requests are only sent to a configured contract.");
+  async function handleOpenNextMarket() {
+    if (!contractCanOpenNext || wrongNetwork) return;
+    await runWrite("open_next_market", [], "Next market opening");
   }
 
-  async function handleClaim(position: LocalPosition) {
-    if (mode !== "contract") {
-      setErrorMessage("Local replay positions are not on-chain and cannot be claimed.");
-      return;
-    }
-    await runWrite("claim_position", [position.marketId, position.side], "Claim");
+  async function handleSettlement(marketIdToSettle: string) {
+    const view = contractPositions.find((item) => item.position.market_id === marketIdToSettle);
+    const market = view?.market ?? (contractMarket?.market_id === marketIdToSettle ? contractMarket : null);
+    if (!market || !isAfter(market.end_at, referenceNow)) return;
+    if (mode === "contract") await runWrite("request_settlement", [marketIdToSettle], "Settlement request");
+  }
+
+  async function handleRefund(marketIdToRefund: string) {
+    const view = contractPositions.find((item) => item.position.market_id === marketIdToRefund);
+    const market = view?.market ?? (contractMarket?.market_id === marketIdToRefund ? contractMarket : null);
+    if (!market || !isAfter(market.settlement_deadline, referenceNow)) return;
+    if (mode === "contract") await runWrite("refund_after_deadline", [marketIdToRefund], "Deadline refund");
+  }
+
+  async function handleClaim(view: ChainPositionView) {
+    if (!view.position.market_id || !view.position.side || view.quote?.claimed || view.quote?.finality_status !== "FINALIZED") return;
+    await runWrite("claim_position", [view.position.market_id, view.position.side], "Payout claim");
   }
 
   async function copyText(text: string) {
@@ -396,13 +630,19 @@ export default function MetalSwapTerminal() {
   }
 
   const primaryLabel = mode === "idle"
-    ? "Start a local replay"
-    : txState === "SUBMITTED"
-      ? "Waiting for GenLayer…"
-      : mode === "contract" && !contractEntryMarket
-        ? "Awaiting next market"
-      : `Place ${selectedSide} position`;
+    ? hasDeployment() ? "Connect wallet" : "Start local replay"
+    : txBusy
+      ? txState === "PROVISIONAL" ? "Awaiting finality…" : "Submitting…"
+      : mode === "contract" && !contractEntryMarket && contractCanOpenNext
+        ? "Open next market"
+        : mode === "contract" && !contractEntryMarket
+          ? contractMarket?.status === "LIVE" ? "Entry closed" : "Market unavailable"
+          : walletBalance === null
+            ? "Request 1,000 demo credits"
+            : `Place ${selectedSide} position`;
   const txLink = explorerLink(txHash);
+  const errorText = errorMessage || contractReadError;
+  const loadedPositionCount = contractAccount?.position_count ?? contractPositions.length;
 
   return (
     <main className="terminal-shell">
@@ -416,13 +656,24 @@ export default function MetalSwapTerminal() {
         <div className="topbar-actions">
           <span className="network-pill"><span className="status-dot" />{NETWORK_NAME} <span className="network-separator">/</span> {hasDeployment() ? "CONTRACT READ" : "SYNTHETIC REPLAY"}</span>
           {walletAddress ? (
-            <button className="wallet-button connected" onClick={() => { setWalletAddress(null); setMode("idle"); setContractAccount(null); }}>
+            <button
+              className="wallet-button connected"
+              onClick={() => {
+                setWalletAddress(null);
+                setMode("idle");
+                setContractAccount(null);
+                setContractPositions([]);
+                setStatusMessage("Wallet disconnected. Contract reads remain available.");
+              }}
+              aria-label={mode === "local" ? "Exit local replay" : `Disconnect wallet ${shortAddress(walletAddress)}`}
+              title={mode === "local" ? "Exit local replay" : "Disconnect wallet"}
+            >
               <WalletCards size={15} strokeWidth={1.8} />
               {mode === "local" ? "Local replay" : shortAddress(walletAddress)}
-              <ChevronDown size={14} />
+              <ChevronDown size={14} aria-hidden="true" />
             </button>
           ) : (
-            <button className="wallet-button" onClick={handleConnect}>
+            <button className="wallet-button" onClick={hasDeployment() ? handleConnect : startLocalReplay}>
               <WalletCards size={15} strokeWidth={1.8} />
               {hasDeployment() ? "Connect wallet" : "Start local replay"}
             </button>
@@ -441,13 +692,18 @@ export default function MetalSwapTerminal() {
         </div>
       </section>
 
-      {(errorMessage || contractReadError) && (
+      {errorText && (
         <div className="error-strip" role="alert">
-          <AlertTriangle size={16} />
-          <span>{errorMessage || contractReadError}</span>
-          <button onClick={() => { clearError(); refreshContract().catch(() => undefined); }} aria-label="Dismiss error"><Check size={14} /></button>
+          <AlertTriangle size={16} aria-hidden="true" />
+          <span>{errorText}</span>
+          {wrongNetwork ? (
+            <button onClick={handleSwitchNetwork}>Switch network</button>
+          ) : (
+            <button onClick={() => { clearError(); refreshContract().catch(() => undefined); }} aria-label="Retry contract read"><RefreshCw size={14} /></button>
+          )}
         </div>
       )}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">{statusMessage}</div>
 
       <section className="interval-bar" aria-label="Interval status">
         <div className="interval-main">
@@ -457,7 +713,7 @@ export default function MetalSwapTerminal() {
         </div>
         <div className="interval-state"><span className="live-indicator" /><span>{statusLabel(displayStatus)}</span><span className="provisional-tag">PROVISIONAL LEADER</span><strong className={provisionalLeader === GOLD ? "gold-text" : "silver-text"}>{provisionalLeader}</strong></div>
         <div className="interval-countdown">
-          <Clock3 size={15} />
+          <Clock3 size={15} aria-hidden="true" />
           <span className="countdown-label">ENDS IN</span>
           <strong>{currentCountdown.label}</strong>
           <span className="countdown-note">UTC</span>
@@ -472,7 +728,7 @@ export default function MetalSwapTerminal() {
                 <h2>Relative performance</h2>
                 <p>Rebased to 100.00 at interval open <span className="muted-separator">·</span> display only</p>
               </div>
-              <div className="chart-meta"><span className="synthetic-tag">SYNTHETIC REPLAY</span><span className="refresh-readout"><span className="status-dot warm" />sampled moments ago</span></div>
+              <div className="chart-meta"><span className="synthetic-tag">SYNTHETIC REPLAY</span><span className="refresh-readout"><span className="status-dot warm" />illustrative only</span></div>
             </div>
             <div className="chart-legend" aria-label="Chart legend">
               <span className="legend-item"><span className="legend-line gold-line" /> GOLD <strong>{formatPercent(chartGold)}</strong></span>
@@ -507,15 +763,23 @@ export default function MetalSwapTerminal() {
               <div className="reading-cell gold-reading"><div className="metal-heading"><span className="metal-swatch gold-swatch" /><span>GOLD</span><span className="instrument-code">XAU / USD</span></div><strong>{formatPercent(chartGold)}</strong><span>rebased return</span></div>
               <div className="reading-divider" />
               <div className="reading-cell silver-reading"><div className="metal-heading"><span className="metal-swatch silver-swatch" /><span>SILVER</span><span className="instrument-code">XAG / USD</span></div><strong>{formatPercent(chartSilver)}</strong><span>rebased return</span></div>
-              <div className="reading-callout"><span className="callout-kicker">INTERVAL CLOSES</span><strong>{formatUtc(currentEnd)}</strong><span>Outcome remains provisional until GenLayer verifies four boundary observations.</span></div>
+              <div className="reading-callout"><span className="callout-kicker">INTERVAL CLOSES</span><strong>{formatUtc(intervalEnd)}</strong><span>Outcome remains provisional until the frozen evidence record is verified and protocol-finalized.</span></div>
             </div>
           </section>
         </div>
 
         <aside className="panel entry-panel" aria-labelledby="entry-heading">
-          <div className="entry-topline"><span className="section-label">UPCOMING MARKET</span><span className={`entry-status ${entryStatusLabel !== "OPEN" ? "waiting" : ""}`}><span className="status-dot" /> {entryStatusLabel}</span></div>
-          <div className="entry-date"><strong>{formatDateUtc(activeStart)}</strong><span>{formatUtc(activeStart)} → {formatUtc(activeEnd)}</span></div>
-          <div className="entry-countdown"><span>ENTRY CLOSES IN</span><strong>{entryCountdown.label}</strong><small>Quarter-hour lock · UTC</small></div>
+          <h2 id="entry-heading" className="sr-only">Enter a MetalSwap prediction position</h2>
+          <div className="entry-topline"><span className="section-label">{entryHeadingLabel}</span><span className={`entry-status ${entryStatusLabel !== "OPEN" ? "waiting" : ""}`}><span className="status-dot" /> {entryStatusLabel}</span></div>
+          <div className="entry-date"><strong>{formatDateUtc(dateFrom(entryContextMarket?.start_at) ?? activeStart)}</strong><span>{formatUtc(dateFrom(entryContextMarket?.start_at) ?? activeStart)} → {formatUtc(dateFrom(entryContextMarket?.end_at) ?? activeEnd)}</span></div>
+          <div className="entry-countdown"><span>{entryIsOpen ? "ENTRY CLOSES IN" : "MARKET STATE"}</span><strong>{entryIsOpen ? entryCountdown.label : statusLabel(contractMarket?.status ?? (mode === "local" ? "UPCOMING" : "CONNECT_TO_ENTER"))}</strong><small>{mode === "contract" ? "Contract state is read from GenLayer" : mode === "local" ? "Quarter-hour lock · UTC" : "Start a replay or connect to enter"}</small></div>
+
+          {hasDeployment() && mode === "idle" ? (
+            <div className="entry-help"><CircleHelp size={14} /><span>Connect a wallet to place a contract position, or <button className="inline-action" onClick={startLocalReplay}>try a local replay</button> with clearly synthetic credits.</span></div>
+          ) : null}
+          {mode === "contract" && !contractEntryMarket ? (
+            <div className="entry-help"><CircleHelp size={14} /><span>{contractMarket?.status === "LIVE" ? "This market is already live; entries are locked until the next market opens." : "No upcoming contract market is open yet."}</span></div>
+          ) : null}
 
           <div className="entry-rule" />
           <div className="section-label">CHOOSE A POSITION</div>
@@ -530,25 +794,43 @@ export default function MetalSwapTerminal() {
 
           <div className="pool-summary">
             <div><span>GOLD POOL</span><strong>{poolStateKnown ? formatCredits(pools.GOLD) : "—"}</strong></div>
-            <div className="pool-bar"><span className="pool-gold-fill" style={{ width: `${totalPool > 0 ? `${(pools.GOLD / totalPool) * 100}%` : "50%"}` }} /><span className="pool-silver-fill" style={{ width: `${totalPool > 0 ? `${(pools.SILVER / totalPool) * 100}%` : "50%"}` }} /></div>
+            <div className="pool-bar"><span className="pool-gold-fill" style={{ width: `${totalPool > 0n ? `${Number((pools.GOLD * 10_000n) / totalPool) / 100}%` : "50%"}` }} /><span className="pool-silver-fill" style={{ width: `${totalPool > 0n ? `${Number((pools.SILVER * 10_000n) / totalPool) / 100}%` : "50%"}` }} /></div>
             <div><span>SILVER POOL</span><strong>{poolStateKnown ? formatCredits(pools.SILVER) : "—"}</strong></div>
           </div>
 
           <div className="stake-block">
             <div className="stake-heading"><span>STAKE AMOUNT</span><span>DEMO CREDITS</span></div>
-            <div className="stake-input-wrap"><input aria-label="Stake amount in demo credits" type="number" min="1" step="1" value={stakeAmount} onChange={(event) => setStakeAmount(Math.max(1, Number(event.target.value) || 1))} /><span>credits</span></div>
-            <div className="quick-stakes">{[10, 25, 50, 100].map((amount) => <button key={amount} className={amount === stakeAmount ? "active" : ""} onClick={() => setStakeAmount(amount)}>{amount}</button>)}</div>
+            <div className={`stake-input-wrap ${stakeError ? "invalid" : ""}`}>
+              <input
+                aria-label="Stake amount in demo credits"
+                aria-describedby="stake-hint stake-error"
+                aria-invalid={Boolean(stakeError)}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                type="text"
+                minLength={1}
+                maxLength={78}
+                value={stakeAmount}
+                onChange={(event) => setStakeAmount(event.target.value)}
+              />
+              <span>credits</span>
+            </div>
+            <p id="stake-hint" className="field-hint">Whole-number demo credits only.</p>
+            {stakeError ? <p id="stake-error" className="field-error" role="status">{stakeError}</p> : null}
+            <div className="quick-stakes" aria-label="Quick stake amounts">{[10, 25, 50, 100].map((amount) => <button key={amount} className={String(amount) === stakeAmount ? "active" : ""} onClick={() => setStakeAmount(String(amount))} aria-pressed={String(amount) === stakeAmount}>{amount}</button>)}</div>
           </div>
 
           <div className="estimate-row"><div><span>ESTIMATED PAYOUT</span><strong>{formatCredits(estimatedPayout)} credits</strong></div><span className="variable-label">variable until lock</span></div>
-          <div className="payout-note">{opposingPool > 0 ? `2% fee applied to a two-sided pool · your share is proportional to your ${selectedSide} stake.` : "One-sided pool → your stake refunds without a fee if no opposing side funds."}</div>
+          <div className="payout-note">{opposingPool > 0n ? `2% fee applied to a two-sided pool · your share is proportional to your ${selectedSide} stake.` : "One-sided pool → your stake refunds without a fee if no opposing side funds."}</div>
 
           {!hasActiveSession ? (
-            <button className="primary-action" onClick={handleConnect}><WalletCards size={17} />{primaryLabel}<ArrowUpRight size={16} /></button>
+            <button className="primary-action" onClick={hasDeployment() ? handleConnect : startLocalReplay}><WalletCards size={17} />{primaryLabel}<ArrowUpRight size={16} /></button>
+          ) : mode === "contract" && !contractEntryMarket ? (
+            <button className="primary-action" onClick={handleOpenNextMarket} disabled={!contractCanOpenNext || txBusy || wrongNetwork}><RefreshCw size={17} />{primaryLabel}<ArrowUpRight size={16} /></button>
           ) : walletBalance === null ? (
-            <button className="primary-action" onClick={handleClaimCredits} disabled={txState === "SUBMITTED"}><Database size={17} />Request 1,000 demo credits<ArrowUpRight size={16} /></button>
+            <button className="primary-action" onClick={handleClaimCredits} disabled={txBusy || wrongNetwork}><Database size={17} />{primaryLabel}<ArrowUpRight size={16} /></button>
           ) : (
-            <button className="primary-action" onClick={handlePlacePosition} disabled={!canPlace}><ArrowUpRight size={17} />{primaryLabel}<span className="action-key">↵</span></button>
+            <button className="primary-action" onClick={handlePlacePosition} disabled={!canPlacePosition}><ArrowUpRight size={17} />{primaryLabel}<span className="action-key">↵</span></button>
           )}
           <p className="action-disclosure"><ShieldCheck size={13} /> Demo credits only. No leverage, liquidation, custody, or physical metal ownership.</p>
         </aside>
@@ -556,27 +838,47 @@ export default function MetalSwapTerminal() {
 
       <section className="lower-grid">
         <section className="panel positions-panel">
-          <div className="panel-heading compact-heading"><div><h2>My positions</h2><p>Wallet-linked entries and claim availability.</p></div><span className="position-count">{positions.length + (contractAccount?.position_count ?? 0)} total</span></div>
-          {positions.length === 0 && !contractAccount?.position_count ? (
+          <div className="panel-heading compact-heading"><div><h2>My positions</h2><p>Wallet-linked entries and claim availability.</p></div><span className="position-count">{formatCredits(loadedPositionCount)} total</span></div>
+          {localPositions.length === 0 && contractPositions.length === 0 ? (
             <div className="empty-state"><div className="empty-icon"><WalletCards size={18} /></div><div><strong>No positions yet</strong><span>Choose GOLD or SILVER above to commit a prediction position for the upcoming interval.</span></div></div>
           ) : (
             <div className="position-list">
-              {positions.map((position) => <div className="position-row" key={position.id}><div className={`position-token ${position.side.toLowerCase()}`}><span className={`metal-swatch ${position.side === GOLD ? "gold-swatch" : "silver-swatch"}`} />{position.side}</div><div><strong>{formatCredits(position.stake)} credits</strong><span>{position.status === "LOCAL_REPLAY" ? "Local replay · not on-chain" : "Submitted to GenLayer"}</span></div><div className="position-state"><span className="state-dot" />{position.status === "LOCAL_REPLAY" ? "LOCAL" : "SUBMITTED"}</div><button className="text-action" onClick={() => handleClaim(position)} disabled={position.status === "LOCAL_REPLAY"}>Claim<ArrowUpRight size={13} /></button></div>)}
-              {contractAccount?.position_count ? <div className="position-row contract-summary"><div className="position-token contract"><LockKeyhole size={14} />CHAIN</div><div><strong>{contractAccount.position_count} contract position{contractAccount.position_count === 1 ? "" : "s"}</strong><span>{formatCredits(contractAccount.total_staked)} credits staked</span></div><div className="position-state"><span className="state-dot cyan" />READ FROM RPC</div><button className="text-action" onClick={refreshContract} disabled={isRefreshing}>{isRefreshing ? "Reading…" : "Refresh"}<RefreshCw size={13} /></button></div> : null}
+              {localPositions.map((position) => <div className="position-row" key={position.id}><div className={`position-token ${position.side.toLowerCase()}`}><span className={`metal-swatch ${position.side === GOLD ? "gold-swatch" : "silver-swatch"}`} />{position.side}</div><div><strong>{formatCredits(position.stake)} credits</strong><span>Local replay · not on-chain</span></div><div className="position-state"><span className="state-dot" />LOCAL</div><span className="text-action disabled-action">Replay only</span></div>)}
+              {contractPositions.map((view) => {
+                const position = view.position;
+                const market = view.market;
+                const quote = view.quote;
+                const marketIdToUse = position.market_id ?? "";
+                const final = quote?.finality_status === "FINALIZED";
+                const claimable = Boolean(final && quote?.exists && !quote.claimed && quote.payout !== undefined);
+                const settlementReady = Boolean(market && ["AWAITING_SETTLEMENT", "PENDING_EVIDENCE"].includes(market.status ?? "") && isAfter(market.end_at, referenceNow));
+                const refundReady = Boolean(market && !market.outcome && isAfter(market.settlement_deadline, referenceNow));
+                const state = quote?.claimed ? "CLAIMED" : claimable ? "CLAIMABLE" : market?.status ? statusLabel(market.status) : "READING";
+                return <div className="position-row" key={`${position.market_id}-${position.side}`}>
+                  <div className={`position-token ${position.side?.toLowerCase() ?? "contract"}`}><span className={`metal-swatch ${position.side === GOLD ? "gold-swatch" : "silver-swatch"}`} />{position.side ?? "POSITION"}</div>
+                  <div><strong>{formatCredits(position.stake)} credits</strong><span>{marketIdToUse || "Market unavailable"} · {market ? statusLabel(market.status) : "refreshing"}</span></div>
+                  <div className="position-state"><span className={`state-dot ${final ? "cyan" : ""}`} />{state}</div>
+                  {settlementReady ? <button className="text-action" onClick={() => handleSettlement(marketIdToUse)} disabled={txBusy}>Settle<ArrowUpRight size={13} /></button>
+                    : refundReady ? <button className="text-action" onClick={() => handleRefund(marketIdToUse)} disabled={txBusy}>Refund<ArrowUpRight size={13} /></button>
+                      : claimable ? <button className="text-action" onClick={() => handleClaim(view)} disabled={txBusy}>Claim {formatCredits(quote?.payout)}<ArrowUpRight size={13} /></button>
+                        : <span className="text-action disabled-action">{quote?.claimed ? "Claimed" : final ? "No payout" : "Awaiting finality"}</span>}
+                </div>;
+              })}
+              {contractAccount && toSafeNumber(contractAccount.position_count) > contractPositions.length ? <div className="position-row contract-summary"><div className="position-token contract"><LockKeyhole size={14} />CHAIN</div><div><strong>{formatCredits(contractAccount.position_count)} contract positions</strong><span>{formatCredits(contractAccount.total_staked)} credits staked</span></div><div className="position-state"><span className="state-dot cyan" />PARTIAL READ</div><button className="text-action" onClick={refreshContract} disabled={isRefreshing}>{isRefreshing ? "Reading…" : "Refresh"}<RefreshCw size={13} /></button></div> : null}
             </div>
           )}
-          {txHash && <div className="tx-notice"><span className="state-dot cyan" /><span>Transaction submitted · {txState === "DECIDED" ? "awaiting finality" : "processing"}</span>{txLink ? <a href={txLink} target="_blank" rel="noreferrer">View receipt <ExternalLink size={12} /></a> : <button onClick={() => copyText(txHash)}>{copied ? "Copied" : "Copy hash"} {copied ? <Check size={12} /> : <Copy size={12} />}</button>}</div>}
+          {txHash && <div className="tx-notice"><span className={`state-dot ${txState === "FINALIZED" ? "cyan" : ""}`} /><span>{txLabel || "Transaction"} · {txState === "PROVISIONAL" ? "accepted provisionally; awaiting protocol finality" : txState === "FINALIZED" ? "finalized" : txState === "FAILED" ? "failed" : "processing"}</span>{txLink ? <a href={txLink} target="_blank" rel="noreferrer">View receipt <ExternalLink size={12} /></a> : <button onClick={() => copyText(txHash)}>{copied ? "Copied" : "Copy hash"} {copied ? <Check size={12} /> : <Copy size={12} />}</button>}</div>}
         </section>
 
         <section className="panel history-panel">
-          <div className="panel-heading compact-heading"><div><h2>Settlement history</h2><p>Public finality records, when available.</p></div><span className="history-filter">ALL MARKETS <ChevronDown size={13} /></span></div>
+          <div className="panel-heading compact-heading"><div><h2>Settlement history</h2><p>Public finality records, when available.</p></div><span className="history-filter">ALL MARKETS</span></div>
           <div className="history-empty"><div className="history-orbit"><Database size={18} /></div><strong>No finalized history read</strong><span>Real settlement records will appear here after a protocol-finalized market is indexed. The current chart is synthetic and is not a trade history.</span></div>
         </section>
       </section>
 
       <section className="protocol-strip">
         <div className="protocol-title"><span className="protocol-icon"><ShieldCheck size={16} /></span><div><strong>Evidence & finality</strong><span>Every outcome follows a separately readable protocol path.</span></div></div>
-        <div className="protocol-steps"><span><b>01</b>Expiry</span><ArrowDownRight size={14} /><span><b>02</b>GenLayer verifies four prices</span><ArrowDownRight size={14} /><span><b>03</b>Finality gate</span><ArrowDownRight size={14} /><span><b>04</b>Claim / refund</span></div>
+        <div className="protocol-steps"><span><b>01</b>Expiry</span><ArrowDownRight size={14} /><span><b>02</b>Evidence agreement</span><ArrowDownRight size={14} /><span><b>03</b>Protocol finality</span><ArrowDownRight size={14} /><span><b>04</b>Claim / refund</span></div>
         <button className="details-link" onClick={() => document.getElementById("settlement-detail")?.scrollIntoView({ behavior: "smooth" })}>Read settlement detail <ArrowUpRight size={14} /></button>
       </section>
 
@@ -585,11 +887,11 @@ export default function MetalSwapTerminal() {
         <div className="detail-layout">
           <div className="evidence-table-wrap">
             <table className="evidence-table"><thead><tr><th>BENCHMARK</th><th>OPEN</th><th>CLOSE</th><th>RETURN</th></tr></thead><tbody><tr><td><span className="metal-swatch gold-swatch" />GOLD <small>XAU / USD</small></td><td>{formatPrice(replayEvidence.goldOpen)}</td><td>{formatPrice(replayEvidence.goldClose)}</td><td className="gold-text">{formatPercent(replayEvidence.goldReturn)}</td></tr><tr><td><span className="metal-swatch silver-swatch" />SILVER <small>XAG / USD</small></td><td>{formatPrice(replayEvidence.silverOpen)}</td><td>{formatPrice(replayEvidence.silverClose)}</td><td className="silver-text">{formatPercent(replayEvidence.silverReturn)}</td></tr></tbody></table>
-            <div className="table-footnote"><Clock3 size={13} /> Both observations are selected at the exact frozen UTC boundaries. Values are shown in USD per troy ounce.</div>
+            <div className="table-footnote"><Clock3 size={13} /> Boundary observations are read after expiry. Values shown here are illustrative synthetic data, not settlement evidence.</div>
           </div>
-          <div className="outcome-card"><span className="section-label">ILLUSTRATIVE OUTCOME</span><div className="outcome-name silver-text">SILVER <span>OUTPERFORMS</span></div><p>GenLayer agrees on the evidence fields. Deterministic code compares:</p><code>silver_close × gold_open<br /><strong>&gt; gold_close × silver_open</strong></code><div className="outcome-note"><ShieldCheck size={14} /><span>Finality status: <strong>example only</strong><br />Claims remain gated until protocol finality.</span></div></div>
+          <div className="outcome-card"><span className="section-label">ILLUSTRATIVE OUTCOME</span><div className="outcome-name silver-text">SILVER <span>OUTPERFORMS</span></div><p>Validators compare the frozen evidence fields. Deterministic code compares:</p><code>silver_close × gold_open<br /><strong>&gt; gold_close × silver_open</strong></code><div className="outcome-note"><ShieldCheck size={14} /><span>Finality status: <strong>example only</strong><br />Claims remain gated until protocol finality.</span></div></div>
         </div>
-        <div className="rule-grid"><div><span>FROZEN SOURCE ID</span><strong>{protocolConfig.source_id}</strong></div><div><span>RULE VERSION</span><strong>{protocolConfig.rule_version}</strong></div><div><span>OBSERVATION WINDOW</span><strong>exact boundary · ≤{protocolConfig.max_gap_seconds}s gap</strong></div><div><span>CONFLICT PATH</span><strong>PENDING EVIDENCE → fee-free refund</strong></div></div>
+        <div className="rule-grid"><div><span>FROZEN SOURCE ID</span><strong>{protocolConfig.source_id}</strong></div><div><span>RULE VERSION</span><strong>{protocolConfig.rule_version}</strong></div><div><span>OBSERVATION WINDOW</span><strong>exact boundary · ≤{toSafeNumber(protocolConfig.max_gap_seconds)}s gap</strong></div><div><span>CONFLICT PATH</span><strong>PENDING EVIDENCE → fee-free refund</strong></div></div>
       </section>
 
       <footer className="footer-bar"><span>MetalSwap · GenLayer testnet prototype</span><span className="footer-links"><a href="https://docs.genlayer.com/" target="_blank" rel="noreferrer">GenLayer docs <ExternalLink size={12} /></a><a href="https://xaus.com/api/" target="_blank" rel="noreferrer">Source feasibility <ExternalLink size={12} /></a><span className="footer-rpc">{GENLAYER_RPC_URL || "RPC not configured"}</span></span></footer>

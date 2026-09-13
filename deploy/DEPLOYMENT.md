@@ -2,14 +2,16 @@
 
 Captured on 2026-09-13 from the configured account `0x2c8eb5db1105a85be66badafed88d10cf393cdd8`.
 
-- Network: GenLayer Studio Network (`studionet`)
+- Network: GenLayer Studio Network (`studionet`), chain ID `61999`
+- RPC: `https://studio.genlayer.com/api`
 - Frontend: [metal-swap.vercel.app](https://metal-swap.vercel.app)
-- Vercel deployment: [ready production build](https://vercel.com/wattxs-projects/metal-swap/5PNNd9PpUvpHAw7B9GRs6B2hwmM8)
-- MetalSwap: `0x1Ad6b4643DCd04AA774a0AD3305c7d3F555EfDDc`
-- SettlementGate: `0x85481500d587A29b523c512FCB7fbCc347FC28a9`
+- Vercel deployment: [ready production build](https://vercel.com/wattxs-projects/metal-swap/ohNSmWedjjFx2Q4Ez2LorKG7Gow2)
+- MetalSwap: `0x7d50E2da8375FFF65Ff7FF513Ea977aa38188B2f`
+- SettlementGate: `0xF0E2eF57E368adB64E6da5Af0Fd256d7457C2581`
 - Frozen evidence source: `https://metal-swap.vercel.app/evidence/`
-- First market: `market-2026-09-13T18:45:00Z`
-- Market interval: `2026-09-13T18:45:00Z → 2026-09-13T19:00:00Z`
+- Market at readback: `market-2026-09-13T21:15:00Z`
+- Market interval: `2026-09-13T21:15:00Z → 2026-09-13T21:30:00Z`
+- Settlement deadline: `2026-09-13T21:40:00Z`
 - Market status at readback: `UPCOMING`
 - Settlement gate: configured; finalized market records at capture: `0`
 
@@ -17,11 +19,11 @@ Every deployment/configuration receipt below was independently awaited at `FINAL
 
 | Step | Transaction |
 | --- | --- |
-| Deploy SettlementGate | `0xc0495e952994b3d15ae8dd863a258cba7a6e8e5fd3927504bbcb3c4f51098175` |
-| Deploy MetalSwap | `0x2a1ae6fc2fc9be3ccf4bc387cb143d0971e9e27744c9a5737c183569e04fac1d` |
-| Bind gate → market | `0x52b04fb0ba47ee5e1fcc804d711a2f477df99926915a82e507ec08d0a1cce5c9` |
-| Bind market → gate | `0x7d71dc10ee9158c026fb5bdb66ca4330b485341ac6a4f9cffe3bce55fbf4bdfb` |
-| Freeze evidence source | `0x312d087aaf5a07e979777177f27b7729d854ad74b6f4ba4714ae81c3575b8e75` |
-| Open first market | `0x844bc37eba5abcfcb5c4a34e237295eb4d99909bde060480e425df73966602c0` |
+| Deploy SettlementGate | `0x2ef2c372c7e2c374f8275eb085fdd4a6ee8ccc11ebbac7cee24309c31b27fa8f` |
+| Deploy MetalSwap | `0x4a4a051f701e055a13fd52e7bb5422adc13c09f6e3f9f32e524d08927e86e7a7` |
+| Bind gate → market | `0x1b123c4afe897b586a055d7d004affc3dbe7cf0f6300a8c3ef846e27e2176082` |
+| Bind market → gate | `0x7dc19a1a7ffeef38d5abc6bac63b5b6ae9f611edb7aef7e72b57418571aa1208` |
+| Freeze evidence source | `0x658f4c486eae30e990f6a0cae498edc12b4f4e3d340442b731d4d17f4abee283` |
+| Open next UTC market | `0xb4b303381862c7284abac35a229a84ca7c9f11076cf794ae813874923844c8ce` |
 
 The raw machine-readable record is in `deploy/last-deployment.json`. This is a synthetic-evidence demo deployment; it is not a claim that live XAUS/AlyawmGold data is settlement-grade.

@@ -1,0 +1,14 @@
+.git
+.pytest_cache
+artifacts
+__pycache__
+*.pyc
+.impeccable
+tests
+contracts
+deploy
+node_modules
+frontend/node_modules
+frontend/.next
+frontend/test-results
+frontend/playwright-report

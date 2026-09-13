@@ -67,7 +67,7 @@ function executionStatus(receipt: GenLayerTransaction): string {
 function assertSucceeded(label: string, receipt: GenLayerTransaction): GenLayerTransaction {
   const consensus = receiptStatus(receipt);
   const execution = executionStatus(receipt);
-  if (!["ACCEPTED", "FINALIZED"].includes(consensus) || !["SUCCESS", "FINISHED_WITH_RETURN"].includes(execution)) {
+  if (consensus !== "FINALIZED" || !["SUCCESS", "FINISHED_WITH_RETURN"].includes(execution)) {
     throw new Error(`${label} failed: consensus=${consensus}, execution=${execution}. Receipt=${JSON.stringify(receipt)}`);
   }
   return receipt;

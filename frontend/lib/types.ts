@@ -1,5 +1,7 @@
 export type Side = "GOLD" | "SILVER";
 
+export type ContractNumber = bigint | number | string;
+
 export type MarketState =
   | "UPCOMING"
   | "LIVE"
@@ -9,7 +11,7 @@ export type MarketState =
   | "CLAIMABLE"
   | "REFUND";
 
-export type TransactionState = "IDLE" | "SUBMITTED" | "DECIDED" | "FINALIZED" | "FAILED";
+export type TransactionState = "IDLE" | "SUBMITTED" | "PROVISIONAL" | "FINALIZED" | "FAILED";
 
 export interface ContractMarket {
   exists?: boolean;
@@ -20,40 +22,39 @@ export interface ContractMarket {
   evidence_url?: string;
   source_id?: string;
   rule_version?: string;
-  fee_bps?: number;
+  fee_bps?: ContractNumber;
   fee_percent_display?: string;
-  price_scale?: number;
-  gold_pool?: number;
-  silver_pool?: number;
-  total_staked?: number;
+  price_scale?: ContractNumber;
+  gold_pool?: ContractNumber;
+  silver_pool?: ContractNumber;
+  total_staked?: ContractNumber;
   settlement_state?: string;
-  settlement_attempts?: number;
+  settlement_attempts?: ContractNumber;
   last_reason_code?: string;
   gold_opening_timestamp?: string;
   gold_closing_timestamp?: string;
   silver_opening_timestamp?: string;
   silver_closing_timestamp?: string;
-  gold_opening_price?: number;
-  gold_closing_price?: number;
-  silver_opening_price?: number;
-  silver_closing_price?: number;
+  gold_opening_price?: ContractNumber;
+  gold_closing_price?: ContractNumber;
+  silver_opening_price?: ContractNumber;
+  silver_closing_price?: ContractNumber;
   evidence_hash?: string;
   outcome?: string;
-  distributable_pool?: number;
-  fee_amount?: number;
-  claimed_amount?: number;
+  distributable_pool?: ContractNumber;
+  fee_amount?: ContractNumber;
+  claimed_amount?: ContractNumber;
   finality_status?: string;
   status?: MarketState | string;
   created_at?: string;
 }
-
 export interface ContractAccount {
   owner?: string;
-  demo_balance?: number;
+  demo_balance?: ContractNumber;
   demo_credits_claimed?: boolean;
-  position_count?: number;
-  total_staked?: number;
-  claimed_payouts?: number;
+  position_count?: ContractNumber;
+  total_staked?: ContractNumber;
+  claimed_payouts?: ContractNumber;
 }
 
 export interface ContractPosition {
@@ -61,9 +62,9 @@ export interface ContractPosition {
   market_id?: string;
   owner?: string;
   side?: Side;
-  stake?: number;
+  stake?: ContractNumber;
   claimed?: boolean;
-  payout?: number;
+  payout?: ContractNumber;
   entered_at?: string;
 }
 
@@ -71,33 +72,40 @@ export interface ClaimQuote {
   exists?: boolean;
   market_id?: string;
   side?: Side;
-  stake?: number;
-  payout?: number;
+  stake?: ContractNumber;
+  payout?: ContractNumber;
   claimed?: boolean;
   finality_status?: string;
   rounding_policy?: string;
+}
+
+export interface ChainPositionView {
+  position: ContractPosition;
+  market: ContractMarket | null;
+  quote: ClaimQuote | null;
 }
 
 export interface LocalPosition {
   id: string;
   marketId: string;
   side: Side;
-  stake: number;
-  status: "SUBMITTED" | "LOCAL_REPLAY";
-  payout: number | null;
+  stake: bigint;
+  status: "LOCAL_REPLAY";
+  payout: bigint | null;
   enteredAt: string;
-  txHash?: string;
 }
 
 export interface ProtocolConfig {
   fee_percent_display: string;
-  max_settlement_attempts: number;
-  settlement_grace_seconds: number;
-  max_gap_seconds: number;
-  max_skew_seconds: number;
-  price_scale: number;
+  max_settlement_attempts: ContractNumber;
+  max_market_horizon_seconds?: ContractNumber;
+  settlement_grace_seconds: ContractNumber;
+  max_gap_seconds: ContractNumber;
+  max_skew_seconds: ContractNumber;
+  price_scale: ContractNumber;
   source_id: string;
   source_base_url: string;
+  source_base_configured?: boolean;
   evidence_schema_version: string;
   rule_version: string;
   selection_rule: string;

@@ -19,6 +19,7 @@ The interface is deliberately terminal-like: one market, one entry decision, one
 - A frozen settlement deadline and deterministic fee-free deadline refund path.
 - A separate `SettlementGate` contract. Claims require a matching finality record from the market contract and are not enabled by an `Accepted`/provisional result.
 - Local replay mode so the product can be inspected without a wallet or deployment.
+- Wallet network checks, account-change handling, and explicit submitted/provisional/finalized transaction states.
 - A dynamic synthetic evidence endpoint at `/evidence/<market-id>.json`.
 
 Demo credits are accounting units for the prototype. They are not USDC, do not represent custody or physical metal, and do not involve leverage or liquidation.
@@ -57,7 +58,7 @@ The UI only enters wallet-backed mode when `NEXT_PUBLIC_METALSWAP_ADDRESS` is se
 ## Contract lifecycle
 
 1. Owner freezes the source base URL and finality-gate address.
-2. Owner opens a future UTC quarter-hour market.
+2. Owner or an authorized operator opens a bounded future UTC quarter-hour market.
 3. Users claim demo credits and place GOLD or SILVER positions before start.
 4. After expiry, anyone requests settlement. Validators independently fetch and validate the same four-field evidence record.
 5. Invalid, missing, or conflicting evidence stays pending. If the frozen deadline passes, positions refund without a fee.
@@ -72,10 +73,11 @@ The market contract never performs arithmetic with an LLM. The non-deterministic
 npm run typecheck
 npm run build
 npm run lint:contract
-& "..\\covenant-sentinel\\.venv\\Scripts\\python.exe" -m pytest tests\\direct -q
+& "..\\covenant-sentinel\\.venv\\Scripts\\python.exe" -m pytest tests\\direct -v
+npm run test:e2e
 ```
 
-The direct suite covers both metals rising/falling, equal relative returns, one-sided refunds, cutoff enforcement, malformed/missing evidence, and the claim gate failure when finality is not configured. Full two-contract finality / claim integration is kept separate because the installed GLSim direct harness gives sibling direct contracts the same simulated address; use a live/local GenLayer node for the wired gate flow.
+The direct suite covers both metals rising/falling, equal relative returns, one-sided refunds, cutoff enforcement, malformed/missing evidence, bounded owner-only opening, and the claim failure before a matching finality record exists. The Playwright suite covers local replay, accessible entry controls, and the rule that future evidence is not published before expiry. The wired two-contract flow is covered in `tests/integration/test_metalswap_flow.py` and requires a live/local GenLayer RPC plus `METALSWAP_INTEGRATION_SOURCE_BASE_URL`.
 
 ## Deployment notes
 

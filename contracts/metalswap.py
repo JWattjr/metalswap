@@ -56,6 +56,7 @@ SELECTION_RULE = "exact_boundary_observation"
 
 MARKET_SECONDS = 900
 SETTLEMENT_GRACE_SECONDS = 600
+MAX_MARKET_HORIZON_SECONDS = MARKET_SECONDS * 2
 MAX_SETTLEMENT_ATTEMPTS = 3
 MAX_GAP_SECONDS = 180
 MAX_SKEW_SECONDS = 60
@@ -66,6 +67,7 @@ PRICE_SCALE = 1_000_000
 DEMO_CREDITS = 1_000
 
 PENDING_REASONS = (
+    "EVIDENCE_NOT_AVAILABLE",
     "SOURCE_UNAVAILABLE",
     "FIXTURE_NOT_FOUND",
     "MALFORMED_JSON",
@@ -625,15 +627,26 @@ class MetalSwap(gl.Contract):
         if evidence_url != expected_url:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} evidence URL must match the frozen source")
         now = self._transaction_time()
-        if self._timestamp_to_epoch(now) >= self._timestamp_to_epoch(start_at):
+        now_year = int(now[0:4])
+        start_year = int(start_at[0:4])
+        if start_year > now_year + 1:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} market start is too far in the future")
+        now_epoch = self._timestamp_to_epoch(now)
+        start_epoch = self._timestamp_to_epoch(start_at)
+        if start_epoch <= now_epoch:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} market start must be in the future")
+        if start_epoch - now_epoch > MAX_MARKET_HORIZON_SECONDS:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} market start is too far in the future")
+        if not self.source_base_configured or not self.finality_gate_configured:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} market setup is incomplete")
         if market_id in self.markets:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} market already exists")
         if self.current_market_id and self.current_market_id in self.markets:
             current = self.markets[self.current_market_id]
-            if self._timestamp_to_epoch(now) < self._timestamp_to_epoch(current.end_at):
+            current_start_epoch = self._timestamp_to_epoch(current.start_at)
+            if now_epoch < self._timestamp_to_epoch(current.end_at):
                 raise gl.vm.UserError(f"{ERROR_EXPECTED} an active market already exists")
-            if self._timestamp_to_epoch(start_at) <= self._timestamp_to_epoch(current.start_at):
+            if start_epoch <= current_start_epoch:
                 raise gl.vm.UserError(f"{ERROR_EXPECTED} market must move forward in time")
         self.markets[market_id] = self._empty_market(market_id, start_at, evidence_url)
         self.market_ids.append(market_id)
@@ -641,6 +654,7 @@ class MetalSwap(gl.Contract):
 
     @gl.public.write
     def open_market(self, market_id: str, start_at: str, evidence_url: str) -> None:
+        self._require_owner()
         self._open_market(market_id, start_at, evidence_url)
 
     @gl.public.write
@@ -704,8 +718,22 @@ class MetalSwap(gl.Contract):
         if not self.finality_gate_configured:
             return False
         try:
+            market = self._require_market(market_id)
             record = SettlementGateInterface(self.finality_gate).view().get_finality(market_id)
-            return isinstance(record, dict) and record.get("finalized") is True and record.get("market_id") == market_id
+            if not isinstance(record, dict) or record.get("finalized") is not True:
+                return False
+            return (
+                record.get("market_id") == market.market_id
+                and record.get("outcome") == market.outcome
+                and record.get("distributable_pool") == market.distributable_pool
+                and record.get("fee_amount") == market.fee_amount
+                and record.get("gold_opening_price") == market.gold_opening_price
+                and record.get("gold_closing_price") == market.gold_closing_price
+                and record.get("silver_opening_price") == market.silver_opening_price
+                and record.get("silver_closing_price") == market.silver_closing_price
+                and record.get("source_url") == market.evidence_url
+                and record.get("evidence_hash") == market.evidence_hash
+            )
         except Exception:
             return False
 
@@ -908,6 +936,7 @@ class MetalSwap(gl.Contract):
             "fee_bps": FEE_BPS,
             "fee_percent_display": "2%",
             "market_seconds": MARKET_SECONDS,
+            "max_market_horizon_seconds": MAX_MARKET_HORIZON_SECONDS,
             "settlement_grace_seconds": SETTLEMENT_GRACE_SECONDS,
             "max_settlement_attempts": MAX_SETTLEMENT_ATTEMPTS,
             "max_gap_seconds": MAX_GAP_SECONDS,

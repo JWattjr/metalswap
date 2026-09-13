@@ -7,9 +7,10 @@
   "scripts": {
     "dev": "npm --prefix frontend run dev --",
     "build": "npm --prefix frontend run build",
-    "start": "npm --prefix frontend run start",
+    "start": "npm --prefix frontend run start --",
     "lint": "npm --prefix frontend run lint",
     "typecheck": "npm --prefix frontend run typecheck",
+    "test:e2e": "npm --prefix frontend run test:e2e",
     "test:contract": "python -X utf8 -m pytest tests/direct -v",
     "lint:contract": "python -X utf8 -m genvm_linter.cli check contracts/metalswap.py && python -X utf8 -m genvm_linter.cli check contracts/settlement_gate.py",
     "deploy": "genlayer deploy"
