@@ -1,0 +1,21 @@
+{
+  "name": "metal-swap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["frontend"],
+  "scripts": {
+    "dev": "npm --prefix frontend run dev --",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run start",
+    "lint": "npm --prefix frontend run lint",
+    "typecheck": "npm --prefix frontend run typecheck",
+    "test:contract": "python -X utf8 -m pytest tests/direct -v",
+    "lint:contract": "python -X utf8 -m genvm_linter.cli check contracts/metalswap.py && python -X utf8 -m genvm_linter.cli check contracts/settlement_gate.py",
+    "deploy": "genlayer deploy"
+  },
+  "devDependencies": {
+    "genlayer-js": "^1.1.8"
+  },
+  "description": "MetalSwap: a synthetic-evidence GenLayer market comparing gold and silver relative performance over 15 minutes."
+}
