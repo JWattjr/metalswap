@@ -1,0 +1,200 @@
+{
+  "network": "Genlayer Studio Network",
+  "deployedAt": "2026-09-14T07:18:26.665Z",
+  "sourceBaseUrl": "https://metal-swap.vercel.app/evidence/",
+  "settlementGateAddress": "0x7EfCc55ccD29Eb63bf727e5b5213a1D44c450759",
+  "metalSwapAddress": "0x04d331073ba620FC165Cf7841e71e9F1270f44c7",
+  "marketOpenTransaction": "0x7a00a6677f38928819bb2f882b68bb626446771fc62153b6d9232d1855ce287a",
+  "deploymentTransactions": [
+    {
+      "label": "1/6 SettlementGate",
+      "hash": "0xb42a8e932069559416f67d450aa233e2776e17704be13df82037cb4dd1c28bdc",
+      "consensus": "FINALIZED",
+      "execution": "SUCCESS"
+    },
+    {
+      "label": "2/6 MetalSwap",
+      "hash": "0x2fd9a91733205a1ddfd5d923375791add8b0d7940b9be3522ac611647981e4b7",
+      "consensus": "FINALIZED",
+      "execution": "SUCCESS"
+    },
+    {
+      "label": "3/6 Bind gate → market",
+      "hash": "0x1726045eba6f7b6c86fc9dc27b7b38362a615eb0f49ea11fe0df2be04a01393e",
+      "consensus": "FINALIZED",
+      "execution": "SUCCESS"
+    },
+    {
+      "label": "4/6 Bind market → gate",
+      "hash": "0x8191cbd648a58956333af57ca72067e86b92931fb0fb7fa804c39d61120530ff",
+      "consensus": "FINALIZED",
+      "execution": "SUCCESS"
+    },
+    {
+      "label": "5/6 Freeze evidence source",
+      "hash": "0x57747f1ed3ecff7d3056c8416712a32cc704b70b9967fe2090de91b77129c531",
+      "consensus": "FINALIZED",
+      "execution": "SUCCESS"
+    },
+    {
+      "label": "6/6 Open prepared future UTC quarter-hour",
+      "hash": "0x7a00a6677f38928819bb2f882b68bb626446771fc62153b6d9232d1855ce287a",
+      "consensus": "FINALIZED",
+      "execution": "SUCCESS"
+    }
+  ],
+  "readback": {
+    "market": {
+      "claimed_amount": 0,
+      "created_at": "2026-09-14T07:17:48Z",
+      "distributable_pool": 0,
+      "end_at": "2026-09-14T07:45:00Z",
+      "evidence_hash": "",
+      "evidence_url": "https://metal-swap.vercel.app/evidence/market-2026-09-14T07:30:00Z.json",
+      "exists": true,
+      "fee_amount": 0,
+      "fee_bps": 200,
+      "fee_percent_display": "2%",
+      "finality_status": "NOT_STARTED",
+      "gold_closing_price": 0,
+      "gold_closing_timestamp": "",
+      "gold_opening_price": 0,
+      "gold_opening_timestamp": "",
+      "gold_pool": 0,
+      "last_reason_code": "",
+      "market_id": "market-2026-09-14T07:30:00Z",
+      "outcome": "",
+      "price_scale": 1000000,
+      "rule_version": "relative-return-cross-multiplication-v1",
+      "settlement_attempts": 0,
+      "settlement_deadline": "2026-09-14T07:55:00Z",
+      "settlement_state": "AWAITING_SETTLEMENT",
+      "silver_closing_price": 0,
+      "silver_closing_timestamp": "",
+      "silver_opening_price": 0,
+      "silver_opening_timestamp": "",
+      "silver_pool": 0,
+      "source_id": "metalswap-synthetic-evidence-v1",
+      "start_at": "2026-09-14T07:30:00Z",
+      "status": "UPCOMING",
+      "total_staked": 0
+    },
+    "config": {
+      "currency": "USD",
+      "evidence_schema_version": "metalswap-evidence-v1",
+      "fee_bps": 200,
+      "fee_percent_display": "2%",
+      "finality_gate_configured": true,
+      "gold_instrument": "SYNTHETIC-XAUUSD-SPOT",
+      "market_seconds": 900,
+      "max_gap_seconds": 180,
+      "max_market_horizon_seconds": 1800,
+      "max_settlement_attempts": 3,
+      "max_skew_seconds": 60,
+      "owner": "0xdB433ff614bDD1ecE21Aa97221C3E0a7ecf79c92",
+      "price_scale": 1000000,
+      "refund_policy": "equal relative returns, one-sided pools, or deadline expiry refund stakes without fees",
+      "rounding_policy": "floor each proportional payout; dust remains undistributed",
+      "rule_version": "relative-return-cross-multiplication-v1",
+      "selection_rule": "exact_boundary_observation",
+      "settlement_grace_seconds": 600,
+      "silver_instrument": "SYNTHETIC-XAGUSD-SPOT",
+      "source_base_configured": true,
+      "source_base_url": "https://metal-swap.vercel.app/evidence/",
+      "source_id": "metalswap-synthetic-evidence-v1",
+      "synthetic_demo": true,
+      "unit": "USD_PER_TROY_OUNCE"
+    },
+    "gate": {
+      "finalized_markets": 0,
+      "market_configured": true,
+      "market_contract": "0x04d331073ba620FC165Cf7841e71e9F1270f44c7"
+    }
+  },
+  "sourceRevision": "6a31ea0ca02d7f08ae8c67f7fa6cd1384d4e05c1",
+  "demo": {
+    "marketId": "market-2026-09-14T07:30:00Z",
+    "interval": {
+      "startAt": "2026-09-14T07:30:00Z",
+      "endAt": "2026-09-14T07:45:00Z",
+      "settlementDeadline": "2026-09-14T07:55:00Z"
+    },
+    "funding": {
+      "gold": {
+        "owner": "0xdB433ff614bDD1ecE21Aa97221C3E0a7ecf79c92",
+        "amount": 25,
+        "creditTransaction": "0x629f3405166bc4d506090df5692c22e96875bc54e085232594b86f85e110e55c",
+        "positionTransaction": "0x62c8d3e9d1f30c9cbfaf6f1bf0f63519570bc539af6744db6a6ff6c2642d0e74"
+      },
+      "silver": {
+        "owner": "0x0839A6DDCeC7aA5E6028490266D6D3EFabE316B5",
+        "amount": 25,
+        "creditTransaction": "0x59e599729913ca6cb063c27c10b01b55bab4992a6b33bc7164ce738979e23983",
+        "positionTransaction": "0x10225b4828769ab9744a917a8e7cf2148cd275505a73140a95cf7005c369bd37"
+      }
+    },
+    "evidence": {
+      "url": "https://metal-swap.vercel.app/evidence/market-2026-09-14T07:30:00Z.json",
+      "status": "FINALIZED",
+      "hash": "sha256:866d6458d151cb8de0c0067cad14671657855878770cebef0e55ac8c3335c23d",
+      "goldOpeningTimestamp": "2026-09-14T07:30:00Z",
+      "goldOpeningPrice": 2371000000,
+      "goldClosingTimestamp": "2026-09-14T07:45:00Z",
+      "goldClosingPrice": 2371700000,
+      "silverOpeningTimestamp": "2026-09-14T07:30:00Z",
+      "silverOpeningPrice": 28310000,
+      "silverClosingTimestamp": "2026-09-14T07:45:00Z",
+      "silverClosingPrice": 28420000
+    },
+    "settlement": {
+      "transaction": "0x77f9b06920f64204b163ab3214e5b9e5299a7a5a033fe314dba951e60e40487f",
+      "receiptStatus": "FINALIZED",
+      "consensusResult": "MAJORITY_AGREE",
+      "execution": "SUCCESS",
+      "outcome": "SILVER",
+      "fee": 1,
+      "distributablePool": 49
+    },
+    "gate": {
+      "finalized": true,
+      "finalizedAt": "2026-09-14T07:46:17.148801Z",
+      "finalizedMarkets": 1,
+      "marketContract": "0x04d331073ba620FC165Cf7841e71e9F1270f44c7"
+    },
+    "payout": {
+      "owner": "0x0839A6DDCeC7aA5E6028490266D6D3EFabE316B5",
+      "side": "SILVER",
+      "stake": 25,
+      "amount": 49,
+      "transaction": "0x8a4a122e4a93431c5a35436d695bb8337a241009beaf011b8b80a5cef75eddb2",
+      "receiptStatus": "FINALIZED",
+      "consensusResult": "MAJORITY_AGREE",
+      "execution": "SUCCESS",
+      "claimed": true
+    },
+    "duplicateClaim": {
+      "transaction": "0xbea5d8c7f671b661d750d7ef68ea81e28a632301bfdf15e0f7c0eaed05367ae4",
+      "receiptStatus": "FINALIZED",
+      "execution": "ERROR",
+      "error": "[EXPECTED] position already claimed"
+    },
+    "rotation": {
+      "transaction": "0x49b1b2e1eb7a04fa87d0d7120c63aa1aef6022fe0b3f40bf99c6f59547089dc4",
+      "receiptStatus": "FINALIZED",
+      "consensusResult": "MAJORITY_AGREE",
+      "execution": "SUCCESS",
+      "newMarketId": "market-2026-09-14T08:00:00Z"
+    },
+    "postRotationReadback": {
+      "currentMarketId": "market-2026-09-14T08:00:00Z",
+      "currentMarketStatus": "UPCOMING",
+      "currentMarketTotalStaked": 0,
+      "historicalPositionOwner": "0x0839A6DDCeC7aA5E6028490266D6D3EFabE316B5",
+      "historicalPositionSide": "SILVER",
+      "historicalPositionStake": 25,
+      "historicalPositionPayout": 49,
+      "historicalPositionClaimed": true,
+      "historicalPositionPageTotal": 1
+    }
+  }
+}

@@ -58,7 +58,7 @@ The UI only enters wallet-backed mode when `NEXT_PUBLIC_METALSWAP_ADDRESS` is se
 ## Contract lifecycle
 
 1. Owner freezes the source base URL and finality-gate address.
-2. Owner or an authorized operator opens a bounded future UTC quarter-hour market.
+2. The owner opens a bounded future UTC quarter-hour market.
 3. Users claim demo credits and place GOLD or SILVER positions before start.
 4. After expiry, anyone requests settlement. Validators independently fetch and validate the same four-field evidence record.
 5. Invalid, missing, or conflicting evidence stays pending. If the frozen deadline passes, positions refund without a fee.
@@ -101,6 +101,19 @@ vercel --prod --yes --cwd frontend
 ```
 
 The current observed addresses and finalized deployment receipts are recorded in [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md); the machine-readable readback is in `deploy/last-deployment.json`.
+
+## Submission-ready demonstration
+
+The current public build is [metal-swap.vercel.app](https://metal-swap.vercel.app), and the source is [github.com/JWattjr/metalswap](https://github.com/JWattjr/metalswap). The deployed contract source is revision `6a31ea0ca02d7f08ae8c67f7fa6cd1384d4e05c1` on GenLayer Studio Network:
+
+- MetalSwap: `0x04d331073ba620FC165Cf7841e71e9F1270f44c7`
+- SettlementGate: `0x7EfCc55ccD29Eb63bf727e5b5213a1D44c450759`
+- Completed market: [`market-2026-09-14T07:30:00Z`](https://metal-swap.vercel.app/evidence/market-2026-09-14T07:30:00Z.json)
+- Rotated current market: `market-2026-09-14T08:00:00Z`
+
+The observed 15-minute demonstration funded GOLD and SILVER with 25 demo credits each, waited for the stored `07:45:00Z` boundary, settled to SILVER, acknowledged finality in SettlementGate, paid 49 credits to the Silver position, rejected the repeated claim with `[EXPECTED] position already claimed`, and opened the next market. Exact receipts, readbacks, and links are in [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md) and [`deploy/last-deployment.json`](deploy/last-deployment.json); the paste-ready Portal text is [`deploy/PORTAL_DESCRIPTION.md`](deploy/PORTAL_DESCRIPTION.md).
+
+This is a controlled mechanics demonstration, not fair trading, live price verification, or real-money trading. The evidence endpoint is public, synthetic, deterministic, and predictable; the balances are demo-credit accounting units. No real-price trading is ready until a validator-retrievable settlement-grade XAU/XAG source is proven end to end. The direct regression suite uses mocked HTTP responses; the deployment and payout path above were demonstrated live on StudioNet.
 
 ## Primary references
 
