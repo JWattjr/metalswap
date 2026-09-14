@@ -47,12 +47,18 @@ SETTLEMENT_REFUND_PROVISIONAL = "REFUND_PROVISIONAL"
 EVIDENCE_SCHEMA_VERSION = "metalswap-evidence-v1"
 RULE_VERSION = "relative-return-cross-multiplication-v1"
 SOURCE_ID = "metalswap-synthetic-evidence-v1"
+XAUS_SOURCE_ID = "xaus-intraday-indicative-v1"
 DEFAULT_SOURCE_BASE_URL = "https://metal-swap.vercel.app/evidence/"
+XAUS_SOURCE_BASE_URL = "https://xaus.com/api/v1/intraday"
+XAUS_EVIDENCE_URL = "https://xaus.com/api/v1/intraday?hours=48"
 GOLD_INSTRUMENT = "SYNTHETIC-XAUUSD-SPOT"
 SILVER_INSTRUMENT = "SYNTHETIC-XAGUSD-SPOT"
+XAUS_GOLD_INSTRUMENT = "XAUUSD"
+XAUS_SILVER_INSTRUMENT = "XAGUSD"
 CURRENCY = "USD"
 UNIT = "USD_PER_TROY_OUNCE"
 SELECTION_RULE = "exact_boundary_observation"
+XAUS_SELECTION_RULE = "latest_observation_at_or_before_boundary"
 
 MARKET_SECONDS = 900
 SETTLEMENT_GRACE_SECONDS = 600
@@ -63,6 +69,9 @@ MAX_SKEW_SECONDS = 60
 MAX_PRICE = 10**12
 MAX_EVIDENCE_BODY_BYTES = 16_384
 MAX_EVIDENCE_STRING_LENGTH = 2_048
+MAX_XAUS_POINTS = 1_500
+XAUS_INTERVAL_SECONDS = 120
+XAUS_HISTORY_HOURS = 48
 FEE_BPS = 200
 BPS_DENOMINATOR = 10_000
 PRICE_SCALE = 1_000_000
@@ -139,6 +148,93 @@ def _is_timestamp_value(value: str) -> bool:
     return 1 <= day <= month_days[month - 1]
 
 
+def _timestamp_to_epoch_value(value: str) -> int:
+    if not _is_timestamp_value(value):
+        return -1
+    year = int(value[0:4])
+    month = int(value[5:7])
+    day = int(value[8:10])
+    seconds = int(value[11:13]) * 3_600 + int(value[14:16]) * 60 + int(value[17:19])
+    days = 0
+    current_year = 1970
+    while current_year < year:
+        days += 366 if current_year % 4 == 0 and (current_year % 100 != 0 or current_year % 400 == 0) else 365
+        current_year += 1
+    month_days = (
+        31,
+        29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    )
+    month_index = 1
+    while month_index < month:
+        days += month_days[month_index - 1]
+        month_index += 1
+    return days * 86_400 + (day - 1) * 86_400 + seconds
+
+
+def _timestamp_from_epoch_value(epoch: int) -> str:
+    remaining = epoch
+    year = 1970
+    while True:
+        year_days = 366 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 365
+        if remaining < year_days * 86_400:
+            break
+        remaining -= year_days * 86_400
+        year += 1
+    month_days = (
+        31,
+        29 if year % 4 == 0 and (year % 100 != 0 or year % 400 == 0) else 28,
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    )
+    month = 1
+    while remaining >= month_days[month - 1] * 86_400:
+        remaining -= month_days[month - 1] * 86_400
+        month += 1
+    day = remaining // 86_400 + 1
+    remaining %= 86_400
+    hour = remaining // 3_600
+    remaining %= 3_600
+    minute = remaining // 60
+    second = remaining % 60
+    return f"{year:04d}-{month:02d}-{day:02d}T{hour:02d}:{minute:02d}:{second:02d}Z"
+
+
+def _fixed_price_from_source_value(value) -> int:
+    if isinstance(value, bool) or value is None:
+        return -1
+    raw = str(value)
+    if raw.startswith("+") or raw.startswith("-") or raw.count(".") > 1 or "e" in raw.lower():
+        return -1
+    if "." in raw:
+        whole, fraction = raw.split(".")
+    else:
+        whole, fraction = raw, ""
+    if not whole or not whole.isdigit() or (fraction and not fraction.isdigit()) or len(fraction) > 6:
+        return -1
+    fixed = int(whole) * PRICE_SCALE + int(fraction.ljust(6, "0") or "0")
+    if fixed <= 0 or fixed > MAX_PRICE:
+        return -1
+    return fixed
+
+
 def _evidence_hash_payload(evidence: dict) -> dict:
     return {
         "schema_version": evidence["schema_version"],
@@ -176,9 +272,9 @@ def _pending_evidence_for_context(context: dict, reason_code: str) -> dict:
         "market_id": context["market_id"],
         "source_id": context["source_id"],
         "evidence_url": context["evidence_url"],
-        "currency": CURRENCY,
-        "unit": UNIT,
-        "selection_rule": SELECTION_RULE,
+        "currency": context.get("currency", CURRENCY),
+        "unit": context.get("unit", UNIT),
+        "selection_rule": context.get("selection_rule", SELECTION_RULE),
         "max_gap_seconds": 0,
         "max_skew_seconds": 0,
         "gold_opening_timestamp": "",
@@ -243,9 +339,9 @@ def _validate_evidence_payload(raw, context: dict) -> dict:
         raise gl.vm.UserError(f"{ERROR_CONSENSUS} evidence market identity mismatch")
     if raw["evidence_url"] != context["evidence_url"]:
         raise gl.vm.UserError(f"{ERROR_CONSENSUS} evidence URL is not frozen")
-    if raw["currency"] != CURRENCY or raw["unit"] != UNIT:
+    if raw["currency"] != context.get("currency", CURRENCY) or raw["unit"] != context.get("unit", UNIT):
         raise gl.vm.UserError(f"{ERROR_CONSENSUS} currency or unit mismatch")
-    if raw["selection_rule"] != SELECTION_RULE:
+    if raw["selection_rule"] != context.get("selection_rule", SELECTION_RULE):
         raise gl.vm.UserError(f"{ERROR_CONSENSUS} evidence selection rule mismatch")
     if raw["status"] == "PENDING_EVIDENCE":
         if raw["reason_code"] not in PENDING_REASONS:
@@ -265,14 +361,6 @@ def _validate_evidence_payload(raw, context: dict) -> dict:
         return raw
     if raw["status"] != "FINALIZED" or raw["reason_code"] != "NONE":
         raise gl.vm.UserError(f"{ERROR_CONSENSUS} unsupported evidence status")
-    if raw["max_gap_seconds"] < 0 or raw["max_gap_seconds"] > MAX_GAP_SECONDS:
-        raise gl.vm.UserError(f"{ERROR_CONSENSUS} observation gap exceeds frozen limit")
-    if raw["max_skew_seconds"] < 0 or raw["max_skew_seconds"] > MAX_SKEW_SECONDS:
-        raise gl.vm.UserError(f"{ERROR_CONSENSUS} timestamp skew exceeds frozen limit")
-    if raw["gold_opening_timestamp"] != context["start_at"] or raw["silver_opening_timestamp"] != context["start_at"]:
-        raise gl.vm.UserError(f"{ERROR_CONSENSUS} opening timestamps are inconsistent")
-    if raw["gold_closing_timestamp"] != context["end_at"] or raw["silver_closing_timestamp"] != context["end_at"]:
-        raise gl.vm.UserError(f"{ERROR_CONSENSUS} closing timestamps are inconsistent")
     for field in (
         "gold_opening_timestamp",
         "gold_closing_timestamp",
@@ -281,6 +369,44 @@ def _validate_evidence_payload(raw, context: dict) -> dict:
     ):
         if not _is_timestamp_value(raw[field]):
             raise gl.vm.UserError(f"{ERROR_CONSENSUS} {field} is not a valid UTC timestamp")
+    if context["source_id"] == XAUS_SOURCE_ID:
+        start_epoch = _timestamp_to_epoch_value(context["start_at"])
+        end_epoch = _timestamp_to_epoch_value(context["end_at"])
+        opening_times = (
+            _timestamp_to_epoch_value(raw["gold_opening_timestamp"]),
+            _timestamp_to_epoch_value(raw["silver_opening_timestamp"]),
+        )
+        closing_times = (
+            _timestamp_to_epoch_value(raw["gold_closing_timestamp"]),
+            _timestamp_to_epoch_value(raw["silver_closing_timestamp"]),
+        )
+        for timestamp in opening_times:
+            if timestamp > start_epoch or start_epoch - timestamp > MAX_GAP_SECONDS:
+                raise gl.vm.UserError(f"{ERROR_CONSENSUS} opening observation is stale or after the boundary")
+        for timestamp in closing_times:
+            if timestamp > end_epoch or end_epoch - timestamp > MAX_GAP_SECONDS:
+                raise gl.vm.UserError(f"{ERROR_CONSENSUS} closing observation is stale or after the boundary")
+        actual_gap = max(
+            start_epoch - opening_times[0],
+            start_epoch - opening_times[1],
+            end_epoch - closing_times[0],
+            end_epoch - closing_times[1],
+        )
+        actual_skew = max(
+            abs(opening_times[0] - opening_times[1]),
+            abs(closing_times[0] - closing_times[1]),
+        )
+        if actual_skew > MAX_SKEW_SECONDS:
+            raise gl.vm.UserError(f"{ERROR_CONSENSUS} cross-metal timestamp skew exceeds frozen limit")
+        if raw["max_gap_seconds"] != actual_gap or raw["max_skew_seconds"] != actual_skew:
+            raise gl.vm.UserError(f"{ERROR_CONSENSUS} evidence alignment summary is inconsistent")
+    else:
+        if raw["max_gap_seconds"] != 0 or raw["max_skew_seconds"] != 0:
+            raise gl.vm.UserError(f"{ERROR_CONSENSUS} synthetic evidence alignment must be exact")
+        if raw["gold_opening_timestamp"] != context["start_at"] or raw["silver_opening_timestamp"] != context["start_at"]:
+            raise gl.vm.UserError(f"{ERROR_CONSENSUS} opening timestamps are inconsistent")
+        if raw["gold_closing_timestamp"] != context["end_at"] or raw["silver_closing_timestamp"] != context["end_at"]:
+            raise gl.vm.UserError(f"{ERROR_CONSENSUS} closing timestamps are inconsistent")
     for field in (
         "gold_opening_price",
         "gold_closing_price",
@@ -300,6 +426,152 @@ def _validate_evidence_payload(raw, context: dict) -> dict:
     if raw["evidence_hash"] != expected_hash:
         raise gl.vm.UserError(f"{ERROR_CONSENSUS} evidence hash mismatch")
     return raw
+
+
+def _read_bounded_json_response(response):
+    status = getattr(response, "status", None)
+    if isinstance(status, bool) or not isinstance(status, int):
+        return None, "SOURCE_UNAVAILABLE"
+    if status == 404:
+        return None, "FIXTURE_NOT_FOUND"
+    if status < 200 or status >= 300:
+        return None, "SOURCE_UNAVAILABLE"
+    body = getattr(response, "body", None)
+    try:
+        if isinstance(body, bytes):
+            if len(body) == 0:
+                return None, "MALFORMED_JSON"
+            if len(body) > MAX_EVIDENCE_BODY_BYTES:
+                return None, "EVIDENCE_TOO_LARGE"
+            text = body.decode("utf-8")
+        elif isinstance(body, str):
+            body_bytes = body.encode("utf-8")
+            if len(body_bytes) == 0:
+                return None, "MALFORMED_JSON"
+            if len(body_bytes) > MAX_EVIDENCE_BODY_BYTES:
+                return None, "EVIDENCE_TOO_LARGE"
+            text = body
+        else:
+            return None, "MALFORMED_JSON"
+        return json.loads(text), ""
+    except Exception:
+        return None, "MALFORMED_JSON"
+
+
+def _read_xaus_json(url: str):
+    try:
+        response = gl.nondet.web.get(url)
+    except Exception:
+        return None, "SOURCE_UNAVAILABLE"
+    return _read_bounded_json_response(response)
+
+
+def _parse_xaus_series(raw, symbol: str):
+    if not isinstance(raw, dict):
+        return None, "INVALID_SCHEMA"
+    if raw.get("symbol") != symbol or raw.get("currency") != "USD" or raw.get("unit") != "troy_oz":
+        return None, "INVALID_SCHEMA"
+    if raw.get("hours") != XAUS_HISTORY_HOURS or raw.get("interval_seconds") != XAUS_INTERVAL_SECONDS:
+        return None, "INVALID_SCHEMA"
+    coverage_seconds = raw.get("coverage_seconds")
+    if isinstance(coverage_seconds, bool) or not isinstance(coverage_seconds, int):
+        return None, "INVALID_SCHEMA"
+    if coverage_seconds <= 0 or coverage_seconds > XAUS_HISTORY_HOURS * 3_600:
+        return None, "INVALID_SCHEMA"
+    data_state = raw.get("data_state")
+    if not isinstance(data_state, dict) or data_state.get("status") != "fresh" or data_state.get("source") != "sampler":
+        return None, "SOURCE_UNAVAILABLE"
+    points = raw.get("points")
+    if not isinstance(points, list) or len(points) == 0 or len(points) > MAX_XAUS_POINTS:
+        return None, "INVALID_SCHEMA"
+    normalized = []
+    previous_timestamp = -1
+    for point in points:
+        if not isinstance(point, dict):
+            return None, "INVALID_SCHEMA"
+        timestamp = point.get("t")
+        if isinstance(timestamp, bool) or not isinstance(timestamp, int) or timestamp <= previous_timestamp:
+            return None, "INVALID_SCHEMA"
+        price = _fixed_price_from_source_value(point.get("p"))
+        if price <= 0:
+            return None, "INVALID_SCHEMA"
+        normalized.append({"t": timestamp, "p": price})
+        previous_timestamp = timestamp
+    return normalized, ""
+
+
+def _select_xaus_boundary_point(points, boundary_epoch: int):
+    selected = None
+    for point in points:
+        if point["t"] <= boundary_epoch:
+            selected = point
+        else:
+            break
+    if selected is None or boundary_epoch - selected["t"] > MAX_GAP_SECONDS:
+        return None
+    return selected
+
+
+def _read_xaus_evidence_for_context(context: dict) -> dict:
+    base_url = context["evidence_url"]
+    gold_raw, reason = _read_xaus_json(f"{base_url}&symbol=xau")
+    if reason:
+        return _pending_evidence_for_context(context, reason)
+    silver_raw, reason = _read_xaus_json(f"{base_url}&symbol=xag")
+    if reason:
+        return _pending_evidence_for_context(context, reason)
+    gold_points, reason = _parse_xaus_series(gold_raw, "xau")
+    if reason:
+        return _pending_evidence_for_context(context, reason)
+    silver_points, reason = _parse_xaus_series(silver_raw, "xag")
+    if reason:
+        return _pending_evidence_for_context(context, reason)
+    start_epoch = _timestamp_to_epoch_value(context["start_at"])
+    end_epoch = _timestamp_to_epoch_value(context["end_at"])
+    gold_open = _select_xaus_boundary_point(gold_points, start_epoch)
+    silver_open = _select_xaus_boundary_point(silver_points, start_epoch)
+    gold_close = _select_xaus_boundary_point(gold_points, end_epoch)
+    silver_close = _select_xaus_boundary_point(silver_points, end_epoch)
+    if gold_open is None or silver_open is None or gold_close is None or silver_close is None:
+        return _pending_evidence_for_context(context, "EVIDENCE_NOT_AVAILABLE")
+    opening_skew = abs(gold_open["t"] - silver_open["t"])
+    closing_skew = abs(gold_close["t"] - silver_close["t"])
+    if max(opening_skew, closing_skew) > MAX_SKEW_SECONDS:
+        return _pending_evidence_for_context(context, "CONFLICTING_EVIDENCE")
+    evidence = {
+        "schema_version": EVIDENCE_SCHEMA_VERSION,
+        "status": "FINALIZED",
+        "market_id": context["market_id"],
+        "source_id": context["source_id"],
+        "evidence_url": context["evidence_url"],
+        "currency": context["currency"],
+        "unit": context["unit"],
+        "selection_rule": context["selection_rule"],
+        "max_gap_seconds": max(
+            start_epoch - gold_open["t"],
+            start_epoch - silver_open["t"],
+            end_epoch - gold_close["t"],
+            end_epoch - silver_close["t"],
+        ),
+        "max_skew_seconds": max(opening_skew, closing_skew),
+        "gold_opening_timestamp": _timestamp_from_epoch_value(gold_open["t"]),
+        "gold_opening_price": gold_open["p"],
+        "gold_closing_timestamp": _timestamp_from_epoch_value(gold_close["t"]),
+        "gold_closing_price": gold_close["p"],
+        "silver_opening_timestamp": _timestamp_from_epoch_value(silver_open["t"]),
+        "silver_opening_price": silver_open["p"],
+        "silver_closing_timestamp": _timestamp_from_epoch_value(silver_close["t"]),
+        "silver_closing_price": silver_close["p"],
+        "evidence_hash": "",
+        "reason_code": "NONE",
+    }
+    evidence["evidence_hash"] = _sha256_text(
+        json.dumps(_evidence_hash_payload(evidence), sort_keys=True, separators=(",", ":"))
+    )
+    try:
+        return _validate_evidence_payload(evidence, context)
+    except Exception:
+        return _pending_evidence_for_context(context, "INVALID_SCHEMA")
 
 
 def _read_evidence_for_context(context: dict) -> dict:
@@ -609,6 +881,12 @@ class MetalSwap(gl.Contract):
             raise gl.vm.UserError(f"{ERROR_EXPECTED} market does not exist")
         return self.markets[market_id]
 
+    def _uses_xaus_source(self) -> bool:
+        return self.source_base_url == XAUS_SOURCE_BASE_URL
+
+    def _configured_source_id(self) -> str:
+        return XAUS_SOURCE_ID if self._uses_xaus_source() else SOURCE_ID
+
     def _empty_market(self, market_id: str, start_at: str, evidence_url: str) -> Market:
         end_at = self._add_seconds(start_at, MARKET_SECONDS)
         return Market(
@@ -617,7 +895,7 @@ class MetalSwap(gl.Contract):
             end_at=end_at,
             settlement_deadline=self._add_seconds(end_at, SETTLEMENT_GRACE_SECONDS),
             evidence_url=evidence_url,
-            source_id=SOURCE_ID,
+            source_id=self._configured_source_id(),
             rule_version=RULE_VERSION,
             fee_bps=FEE_BPS,
             gold_pool=0,
@@ -655,21 +933,30 @@ class MetalSwap(gl.Contract):
             "end_at": market.end_at,
             "source_id": market.source_id,
             "evidence_url": market.evidence_url,
+            "currency": CURRENCY,
+            "unit": UNIT,
+            "selection_rule": XAUS_SELECTION_RULE if market.source_id == XAUS_SOURCE_ID else SELECTION_RULE,
         }
 
     def _expected_evidence_url(self, market_id: str) -> str:
+        if self._uses_xaus_source():
+            return XAUS_EVIDENCE_URL
         return f"{self.source_base_url}{market_id}.json"
 
     def _validate_evidence_result(self, raw, market: Market) -> dict:
         return _validate_evidence_payload(raw, self._evidence_context(market))
 
     def _read_evidence(self, market: Market) -> dict:
+        if market.source_id == XAUS_SOURCE_ID:
+            return _read_xaus_evidence_for_context(self._evidence_context(market))
         return _read_evidence_for_context(self._evidence_context(market))
 
     def _consensus_evidence(self, market: Market) -> dict:
         context = self._evidence_context(market)
 
         def leader_fn() -> dict:
+            if context["source_id"] == XAUS_SOURCE_ID:
+                return _read_xaus_evidence_for_context(context)
             return _read_evidence_for_context(context)
 
         def validator_fn(leader_result) -> bool:
@@ -677,7 +964,11 @@ class MetalSwap(gl.Contract):
                 return False
             try:
                 leader = _validate_evidence_payload(leader_result.calldata, context)
-                validator = _read_evidence_for_context(context)
+                validator = (
+                    _read_xaus_evidence_for_context(context)
+                    if context["source_id"] == XAUS_SOURCE_ID
+                    else _read_evidence_for_context(context)
+                )
                 return leader == validator
             except Exception:
                 return False
@@ -704,8 +995,12 @@ class MetalSwap(gl.Contract):
         self._require_owner()
         if len(self.market_ids) != 0 or self.source_base_configured:
             raise gl.vm.UserError(f"{ERROR_EXPECTED} source is already frozen")
-        if not isinstance(source_base_url, str) or not source_base_url.startswith("https://") or not source_base_url.endswith("/") or len(source_base_url) > 200:
-            raise gl.vm.UserError(f"{ERROR_EXPECTED} source base URL must be an HTTPS directory")
+        if not isinstance(source_base_url, str) or not source_base_url.startswith("https://") or len(source_base_url) > 200:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} source base URL must be HTTPS")
+        is_synthetic_directory = source_base_url.endswith("/")
+        is_xaus_source = source_base_url == XAUS_SOURCE_BASE_URL
+        if not is_synthetic_directory and not is_xaus_source:
+            raise gl.vm.UserError(f"{ERROR_EXPECTED} source must be a frozen HTTPS directory or the approved XAUS endpoint")
         self.source_base_url = source_base_url
         self.source_base_configured = True
 
@@ -1059,6 +1354,7 @@ class MetalSwap(gl.Contract):
 
     @gl.public.view
     def get_protocol_config(self) -> dict:
+        uses_xaus = self._uses_xaus_source()
         return {
             "owner": self.owner.as_hex,
             "fee_bps": FEE_BPS,
@@ -1072,17 +1368,20 @@ class MetalSwap(gl.Contract):
             "price_scale": PRICE_SCALE,
             "rounding_policy": "floor each proportional payout; dust remains undistributed",
             "refund_policy": "equal relative returns, one-sided pools, or deadline expiry refund stakes without fees",
-            "source_id": SOURCE_ID,
+            "source_id": XAUS_SOURCE_ID if uses_xaus else SOURCE_ID,
             "source_base_url": self.source_base_url,
             "source_base_configured": self.source_base_configured,
             "evidence_schema_version": EVIDENCE_SCHEMA_VERSION,
             "rule_version": RULE_VERSION,
-            "selection_rule": SELECTION_RULE,
-            "gold_instrument": GOLD_INSTRUMENT,
-            "silver_instrument": SILVER_INSTRUMENT,
+            "selection_rule": XAUS_SELECTION_RULE if uses_xaus else SELECTION_RULE,
+            "gold_instrument": XAUS_GOLD_INSTRUMENT if uses_xaus else GOLD_INSTRUMENT,
+            "silver_instrument": XAUS_SILVER_INSTRUMENT if uses_xaus else SILVER_INSTRUMENT,
             "currency": CURRENCY,
             "unit": UNIT,
-            "synthetic_demo": True,
+            "source_mode": "XAUS_INDICATIVE_HISTORICAL_REPLAY" if uses_xaus else "SYNTHETIC_DEMO",
+            "source_terms_url": "https://xaus.com/api/" if uses_xaus else "",
+            "source_history_hours": XAUS_HISTORY_HOURS if uses_xaus else 0,
+            "synthetic_demo": not uses_xaus,
             "finality_gate_configured": self.finality_gate_configured,
         }
 

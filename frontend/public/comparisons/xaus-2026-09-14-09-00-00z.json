@@ -1,0 +1,46 @@
+{
+  "case_id": "xaus-2026-09-14-09-00-00z",
+  "mode": "HISTORICAL_REPLAY",
+  "market_id": "replay-2026-09-14T09:00:00Z",
+  "interval": {
+    "start_at": "2026-09-14T09:00:00Z",
+    "end_at": "2026-09-14T09:15:00Z"
+  },
+  "source": {
+    "id": "xaus-intraday-indicative-v1",
+    "name": "XAUS public intraday sampler",
+    "terms_url": "https://xaus.com/api/",
+    "gold_url": "https://xaus.com/api/v1/intraday?symbol=xau&hours=48",
+    "silver_url": "https://xaus.com/api/v1/intraday?symbol=xag&hours=48",
+    "captured_at": "2026-09-14T09:36:02Z",
+    "source_state": "fresh",
+    "source_state_origin": "sampler"
+  },
+  "observations": {
+    "gold": {
+      "instrument": "XAUUSD",
+      "currency": "USD",
+      "unit": "troy_oz",
+      "opening": { "timestamp": "2026-09-14T08:58:02Z", "price_fixed": 4305100098 },
+      "closing": { "timestamp": "2026-09-14T09:14:02Z", "price_fixed": 4307600098 }
+    },
+    "silver": {
+      "instrument": "XAGUSD",
+      "currency": "USD",
+      "unit": "troy_oz",
+      "opening": { "timestamp": "2026-09-14T08:58:02Z", "price_fixed": 63307999 },
+      "closing": { "timestamp": "2026-09-14T09:14:02Z", "price_fixed": 63294998 }
+    }
+  },
+  "alignment": {
+    "selection_rule": "latest_observation_at_or_before_boundary",
+    "max_boundary_staleness_seconds": 180,
+    "actual_max_boundary_staleness_seconds": 118,
+    "max_cross_metal_timestamp_skew_seconds": 60,
+    "actual_max_cross_metal_timestamp_skew_seconds": 0,
+    "fixed_point_scale": 1000000
+  },
+  "evidence_hash": "sha256:c140120075b4319ae799c64e4dfef4fc21589e363f093fa4611279d8eeca7692",
+  "settlement": null,
+  "note": "This is an archived comparison of externally published indicative observations. It is not a MetalSwap wager, settlement evidence, executable quote, or benchmark claim."
+}

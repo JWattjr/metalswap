@@ -28,6 +28,8 @@ import type {
 
 const GATE_SOURCE = "contracts/settlement_gate.py";
 const MARKET_SOURCE = "contracts/metalswap.py";
+const XAUS_SOURCE_BASE_URL = "https://xaus.com/api/v1/intraday";
+const XAUS_EVIDENCE_URL = "https://xaus.com/api/v1/intraday?hours=48";
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 
 type Loose = Record<string, any>;
@@ -131,8 +133,9 @@ class Deployer {
 
 export default async function main(client: GenLayerClient<GenLayerChain>) {
   const sourceBaseUrl = env("METALSWAP_SOURCE_BASE_URL");
-  if (!sourceBaseUrl.startsWith("https://") || !sourceBaseUrl.endsWith("/")) {
-    throw new Error("Set METALSWAP_SOURCE_BASE_URL to the exact hosted HTTPS evidence directory, including the trailing slash.");
+  const isXausSource = sourceBaseUrl === XAUS_SOURCE_BASE_URL;
+  if (!sourceBaseUrl.startsWith("https://") || (!sourceBaseUrl.endsWith("/") && !isXausSource)) {
+    throw new Error("Set METALSWAP_SOURCE_BASE_URL to the exact hosted HTTPS evidence directory or https://xaus.com/api/v1/intraday.");
   }
 
   const deployer = new Deployer(client);
@@ -144,28 +147,48 @@ export default async function main(client: GenLayerClient<GenLayerChain>) {
   await deployer.write("5/6 Freeze evidence source", marketAddress, "configure_source_base_url", [sourceBaseUrl]);
   const startAt = preparedQuarterHour();
   const marketId = `market-${startAt}`;
+  const evidenceUrl = isXausSource ? XAUS_EVIDENCE_URL : `${sourceBaseUrl}${marketId}.json`;
   const marketOpenHash = await deployer.write(
     "6/6 Open prepared future UTC quarter-hour",
     marketAddress,
     "open_market",
-    [marketId, startAt, `${sourceBaseUrl}${marketId}.json`],
+    [marketId, startAt, evidenceUrl],
   );
 
   const market = await client.readContract({ address: marketAddress, functionName: "get_current_market", args: [] });
   const config = await client.readContract({ address: marketAddress, functionName: "get_protocol_config", args: [] });
   const gate = await client.readContract({ address: gateAddress, functionName: "get_gate_status", args: [] });
   const network = (client.chain as GenLayerChain | undefined)?.name ?? "unknown-network";
+  const outputPath = path.resolve(process.cwd(), "deploy/last-deployment.json");
+  let previousSyntheticDeployment: Loose | undefined;
+  try {
+    const previous = JSON.parse(readFileSync(outputPath, "utf-8")) as Loose;
+    if (previous?.demo) {
+      previousSyntheticDeployment = {
+        network: previous.network,
+        deployedAt: previous.deployedAt,
+        sourceRevision: previous.sourceRevision,
+        metalSwapAddress: previous.metalSwapAddress,
+        settlementGateAddress: previous.settlementGateAddress,
+        demo: previous.demo,
+      };
+    }
+  } catch {
+    previousSyntheticDeployment = undefined;
+  }
   const record = {
     network,
     deployedAt: new Date().toISOString(),
+    sourceRevision: env("METALSWAP_SOURCE_REVISION", "unknown"),
+    sourceMode: isXausSource ? "XAUS_INDICATIVE_HISTORICAL_REPLAY" : "SYNTHETIC_DEMO",
     sourceBaseUrl,
     settlementGateAddress: gateAddress,
     metalSwapAddress: marketAddress,
     marketOpenTransaction: String(marketOpenHash),
     deploymentTransactions: deployer.transactions(),
     readback: { market, config, gate },
+    ...(previousSyntheticDeployment ? { previousSyntheticDeployment } : {}),
   };
-  const outputPath = path.resolve(process.cwd(), "deploy/last-deployment.json");
   writeFileSync(outputPath, `${JSON.stringify(record, null, 2)}\n`, "utf-8");
   console.log(`\nMetalSwap deployed on ${network}. Observed state recorded at ${outputPath}`);
   console.log(`  NEXT_PUBLIC_METALSWAP_ADDRESS=${marketAddress}`);

@@ -40,3 +40,21 @@ test("closed historical synthetic evidence still has a canonical record", async 
   expect(evidence.status).toBe("FINALIZED");
   expect(evidence.evidence_hash).toMatch(/^sha256:[0-9a-f]{64}$/);
 });
+
+test("wallet-free comparison proofs expose alignment, arithmetic, and settlement state", async ({ page }) => {
+  await page.goto("/comparison/metalswap-synthetic-2026-09-14-07-30-00z");
+  await expect(page.getByRole("heading", { name: "Gold vs Silver settlement proof" })).toBeVisible();
+  await expect(page.getByText("SYNTHETIC DEMO")).toBeVisible();
+  await expect(page.getByText("FINALIZED", { exact: true })).toBeVisible();
+  await expect(page.getByText("Duplicate claim rejected", { exact: false })).toBeVisible();
+  await expect(page.getByText("Delayed publication does not make this outcome unpredictable.")).toBeVisible();
+});
+
+test("wallet-free XAUS replay shows real source references without presenting a wager", async ({ page }) => {
+  await page.goto("/comparison/xaus-2026-09-14-09-00-00z");
+  await expect(page.getByRole("heading", { name: "Gold vs Silver real-observation replay" })).toBeVisible();
+  await expect(page.getByText("HISTORICAL REPLAY")).toBeVisible();
+  await expect(page.getByText("Comparison-only replay")).toBeVisible();
+  await expect(page.getByText("XAUUSD", { exact: true })).toBeVisible();
+  await expect(page.getByText("XAGUSD", { exact: true })).toBeVisible();
+});

@@ -1067,7 +1067,7 @@ export default function MetalSwapTerminal() {
       </section>
 
       <section id="settlement-detail" className="settlement-detail">
-        <div className="detail-heading"><div><h2>What gets verified at settlement</h2><p>Illustrative synthetic record — not live market evidence.</p></div><span className="synthetic-tag">SYNTHETIC REPLAY · NOT LIVE</span></div>
+        <div className="detail-heading"><div><h2>What gets verified at settlement</h2><p>Illustrative synthetic record — not live market evidence.</p></div><div className="detail-heading-actions"><a className="details-link" href="/comparison/metalswap-synthetic-2026-09-14-07-30-00z">Open public comparison proof <ExternalLink size={13} /></a><span className="synthetic-tag">SYNTHETIC REPLAY · NOT LIVE</span></div></div>
         <div className="detail-layout">
           <div className="evidence-table-wrap">
             <table className="evidence-table"><thead><tr><th>BENCHMARK</th><th>OPEN</th><th>CLOSE</th><th>RETURN</th></tr></thead><tbody><tr><td><span className="metal-swatch gold-swatch" />GOLD <small>XAU / USD</small></td><td>{formatPrice(replayEvidence.goldOpen)}</td><td>{formatPrice(replayEvidence.goldClose)}</td><td className="gold-text">{formatPercent(replayEvidence.goldReturn)}</td></tr><tr><td><span className="metal-swatch silver-swatch" />SILVER <small>XAG / USD</small></td><td>{formatPrice(replayEvidence.silverOpen)}</td><td>{formatPrice(replayEvidence.silverClose)}</td><td className="silver-text">{formatPercent(replayEvidence.silverReturn)}</td></tr></tbody></table>

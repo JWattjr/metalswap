@@ -126,6 +126,9 @@ export interface ProtocolConfig {
   source_id: string;
   source_base_url: string;
   source_base_configured?: boolean;
+  source_mode?: string;
+  source_terms_url?: string;
+  source_history_hours?: ContractNumber;
   evidence_schema_version: string;
   rule_version: string;
   selection_rule: string;

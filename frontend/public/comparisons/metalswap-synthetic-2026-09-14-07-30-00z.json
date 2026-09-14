@@ -1,0 +1,62 @@
+{
+  "case_id": "metalswap-synthetic-2026-09-14-07-30-00z",
+  "mode": "SYNTHETIC_DEMO",
+  "market_id": "market-2026-09-14T07:30:00Z",
+  "interval": {
+    "start_at": "2026-09-14T07:30:00Z",
+    "end_at": "2026-09-14T07:45:00Z",
+    "settlement_deadline": "2026-09-14T07:55:00Z"
+  },
+  "source": {
+    "id": "metalswap-synthetic-evidence-v1",
+    "name": "MetalSwap deterministic synthetic generator",
+    "terms_url": "https://github.com/JWattjr/metalswap/blob/main/docs/DATA_FEASIBILITY.md",
+    "evidence_url": "https://metal-swap.vercel.app/evidence/market-2026-09-14T07:30:00Z.json",
+    "captured_at": "2026-09-14T07:45:05Z",
+    "source_state": "synthetic",
+    "source_state_origin": "developer-generated"
+  },
+  "observations": {
+    "gold": {
+      "instrument": "SYNTHETIC-XAUUSD-SPOT",
+      "currency": "USD",
+      "unit": "USD_PER_TROY_OUNCE",
+      "opening": { "timestamp": "2026-09-14T07:30:00Z", "price_fixed": 2371000000 },
+      "closing": { "timestamp": "2026-09-14T07:45:00Z", "price_fixed": 2371700000 }
+    },
+    "silver": {
+      "instrument": "SYNTHETIC-XAGUSD-SPOT",
+      "currency": "USD",
+      "unit": "USD_PER_TROY_OUNCE",
+      "opening": { "timestamp": "2026-09-14T07:30:00Z", "price_fixed": 28310000 },
+      "closing": { "timestamp": "2026-09-14T07:45:00Z", "price_fixed": 28420000 }
+    }
+  },
+  "alignment": {
+    "selection_rule": "exact_boundary_observation",
+    "max_boundary_staleness_seconds": 0,
+    "actual_max_boundary_staleness_seconds": 0,
+    "max_cross_metal_timestamp_skew_seconds": 0,
+    "actual_max_cross_metal_timestamp_skew_seconds": 0,
+    "fixed_point_scale": 1000000
+  },
+  "evidence_hash": "sha256:866d6458d151cb8de0c0067cad14671657855878770cebef0e55ac8c3335c23d",
+  "settlement": {
+    "market_contract": "0x04d331073ba620FC165Cf7841e71e9F1270f44c7",
+    "settlement_gate": "0x7EfCc55ccD29Eb63bf727e5b5213a1D44c450759",
+    "source_revision": "6a31ea0ca02d7f08ae8c67f7fa6cd1384d4e05c1",
+    "outcome": "SILVER",
+    "pool": 50,
+    "fee": 1,
+    "distributable_pool": 49,
+    "payout_side": "SILVER",
+    "payout": 49,
+    "gate_finalized": true,
+    "gate_finalized_at": "2026-09-14T07:46:17.148801Z",
+    "settlement_receipt": "0x77f9b06920f64204b163ab3214e5b9e5299a7a5a033fe314dba951e60e40487f",
+    "payout_receipt": "0x8a4a122e4a93431c5a35436d695bb8337a241009beaf011b8b80a5cef75eddb2",
+    "duplicate_claim_receipt": "0xbea5d8c7f671b661d750d7ef68ea81e28a632301bfdf15e0f7c0eaed05367ae4",
+    "duplicate_claim_error": "[EXPECTED] position already claimed"
+  },
+  "note": "This is a controlled synthetic mechanics demonstration. Its deterministic values are predictable and do not represent real prices or fair trading."
+}
