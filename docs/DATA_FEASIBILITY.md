@@ -11,6 +11,8 @@ On 2026-09-14, both public XAUS requests were fetched successfully without crede
 
 The observed responses were HTTP 200 JSON with `symbol` values `xau` and `xag`, `currency=USD`, `unit=troy_oz`, `interval_seconds=120`, fresh `data_state.source=sampler`, and usable 48-hour response windows. The documented retention is 14 days. XAUS documents no API key, no hard rate limit for reasonable use, a 30-second client cache expectation, and contact above 10,000 requests/day. Source policy and field semantics: https://xaus.com/api/
 
+A later verification probe returned HTTP 503 from both endpoints. That does not invalidate the archived response capture, but it means live-source availability is not claimed and the fresh deployment was not funded or settled against XAUS.
+
 The provider identifies the instruments as XAU/USD spot and XAG/USD spot in USD per troy ounce. It explicitly describes the values as indicative mid-market rates and says they are not settlement-grade, tradable quotes, or suitable for execution or contractual valuation. MetalSwap therefore uses the source only for a clearly labeled historical replay/comparison case. A future market must not be presented as fair trading or official benchmark settlement.
 
 The public case `xaus-2026-09-14-09-00-00z` records the actual selected observations, source URLs, retrieval metadata, canonical hash, and the comparison result. The archived case is proof material, not a substitute for validator-side source retrieval.

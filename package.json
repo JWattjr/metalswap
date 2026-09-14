@@ -18,5 +18,5 @@
   "devDependencies": {
     "genlayer-js": "^1.1.8"
   },
-  "description": "MetalSwap: a synthetic-evidence GenLayer market comparing gold and silver relative performance over 15 minutes."
+  "description": "MetalSwap: a GenLayer market comparing Gold and Silver relative performance over 15 minutes with paired-source evidence."
 }

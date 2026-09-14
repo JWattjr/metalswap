@@ -781,6 +781,15 @@ export default function MetalSwapTerminal() {
   const txLink = explorerLink(txHash);
   const errorText = errorMessage || contractReadError;
   const loadedPositionCount = contractAccount?.position_count ?? contractPositions.length;
+  const usesXausSource = protocolConfig.source_mode === "XAUS_INDICATIVE_HISTORICAL_REPLAY";
+  const settlementSourceLabel = usesXausSource
+    ? "XAUS indicative historical replay"
+    : mode === "local" || !hasDeployment()
+      ? "synthetic demo"
+      : "configured source";
+  const settlementDetailSubtitle = usesXausSource
+    ? "Display-only synthetic example; the deployed XAUS source is fetched independently after expiry."
+    : "Illustrative synthetic record — not live market evidence.";
 
   return (
     <main className="terminal-shell">
@@ -826,6 +835,8 @@ export default function MetalSwapTerminal() {
         </div>
         <div className="truth-stack">
           <div className="truth-line"><span className="truth-dot cyan" />Synthetic evidence demo</div>
+          <div className="truth-line"><Database size={13} />Settlement source: {settlementSourceLabel}</div>
+          {usesXausSource && protocolConfig.source_terms_url ? <a className="truth-line" href={protocolConfig.source_terms_url} target="_blank" rel="noreferrer">XAUS terms: indicative / non-executable ↗</a> : null}
           <div className="truth-line"><LockKeyhole size={13} />2% fee frozen before entry</div>
         </div>
       </section>
@@ -1067,7 +1078,7 @@ export default function MetalSwapTerminal() {
       </section>
 
       <section id="settlement-detail" className="settlement-detail">
-        <div className="detail-heading"><div><h2>What gets verified at settlement</h2><p>Illustrative synthetic record — not live market evidence.</p></div><div className="detail-heading-actions"><a className="details-link" href="/comparison/metalswap-synthetic-2026-09-14-07-30-00z">Open public comparison proof <ExternalLink size={13} /></a><span className="synthetic-tag">SYNTHETIC REPLAY · NOT LIVE</span></div></div>
+        <div className="detail-heading"><div><h2>What gets verified at settlement</h2><p>{settlementDetailSubtitle}</p></div><div className="detail-heading-actions"><a className="details-link" href="/comparison/metalswap-synthetic-2026-09-14-07-30-00z">Open public comparison proof <ExternalLink size={13} /></a><span className="synthetic-tag">SYNTHETIC REPLAY · NOT LIVE</span></div></div>
         <div className="detail-layout">
           <div className="evidence-table-wrap">
             <table className="evidence-table"><thead><tr><th>BENCHMARK</th><th>OPEN</th><th>CLOSE</th><th>RETURN</th></tr></thead><tbody><tr><td><span className="metal-swatch gold-swatch" />GOLD <small>XAU / USD</small></td><td>{formatPrice(replayEvidence.goldOpen)}</td><td>{formatPrice(replayEvidence.goldClose)}</td><td className="gold-text">{formatPercent(replayEvidence.goldReturn)}</td></tr><tr><td><span className="metal-swatch silver-swatch" />SILVER <small>XAG / USD</small></td><td>{formatPrice(replayEvidence.silverOpen)}</td><td>{formatPrice(replayEvidence.silverClose)}</td><td className="silver-text">{formatPercent(replayEvidence.silverReturn)}</td></tr></tbody></table>

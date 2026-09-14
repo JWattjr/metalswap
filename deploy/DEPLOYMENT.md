@@ -1,88 +1,89 @@
-# Observed deployment and live demonstration
+# Observed deployment and proof package
 
-Captured from the authorized StudioNet test accounts on 2026-09-14. The deployed contract source is revision `6a31ea0ca02d7f08ae8c67f7fa6cd1384d4e05c1`; later documentation commits do not change the deployed contract bytes.
+Captured from authorized GenLayer StudioNet test accounts on 2026-09-14. The current XAUS-bound pair was deployed from source revision [`3adc8ec0bc2a29173db8fcac9f49cc588e3b0041`](https://github.com/JWattjr/metalswap/commit/3adc8ec0bc2a29173db8fcac9f49cc588e3b0041). The earlier synthetic pair and its completed payout remain preserved below.
 
 ## Public package
 
 - App: [metal-swap.vercel.app](https://metal-swap.vercel.app)
 - Repository: [github.com/JWattjr/metalswap](https://github.com/JWattjr/metalswap)
-- Production build: [Vercel deployment `dpl_3otmuZRV9XGBwsXPnXEDrHcoVRuk`](https://vercel.com/wattxs-projects/metal-swap/3otmuZRV9XGBwsXPnXEDrHcoVRuk)
+- Current production build: [Vercel deployment `dpl_BJ6HrQc9cyH4iZwSoLgjCy2Y89E3`](https://vercel.com/wattxs-projects/metal-swap/BJ6HrQc9cyH4iZwSoLgjCy2Y89E3)
 - Network: GenLayer Studio Network (`studionet`), chain ID `61999`
 - RPC: `https://studio.genlayer.com/api`
-- Frozen evidence origin: `https://metal-swap.vercel.app/evidence/`
-- MetalSwap: `0x04d331073ba620FC165Cf7841e71e9F1270f44c7`
-- SettlementGate: `0x7EfCc55ccD29Eb63bf727e5b5213a1D44c450759`
+- Public XAUS comparison: [xaus-2026-09-14-09-00-00z](https://metal-swap.vercel.app/comparison/xaus-2026-09-14-09-00-00z)
+- Preserved synthetic mechanics proof: [metalswap-synthetic-2026-09-14-07-30-00z](https://metal-swap.vercel.app/comparison/metalswap-synthetic-2026-09-14-07-30-00z)
+- Current MetalSwap: `0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6`
+- Current SettlementGate: `0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131`
 - Owner observed in config: `0xdB433ff614bDD1ecE21Aa97221C3E0a7ecf79c92`
 
-The explorer links below use the configured public StudioNet explorer route (`https://genlayer-explorer.vercel.app/tx/<hash>`). The explorer returned HTTP 503 during this capture, so the links are preserved for later loading; the receipt statuses and state readbacks below were obtained directly from StudioNet.
+The current pair freezes `https://xaus.com/api/v1/intraday?hours=48` as source identity `xaus-intraday-indicative-v1`, with `XAUUSD` and `XAGUSD` in USD per troy ounce. XAUS's own terms describe the series as indicative mid-market values, not settlement-grade, executable, or contractual prices. The source is used here for a named historical replay/comparison, not fair live trading.
 
-## Deployment and binding receipts
+## Fresh XAUS deployment and binding receipts
 
-The deployment script awaited `FINALIZED` and checked execution `SUCCESS` before writing `deploy/last-deployment.json`.
+The deployment script checked protocol consensus `FINALIZED` and execution `SUCCESS` before writing the manifest. It also read back the frozen source, source mode, instruments, alignment limits, gate binding, and prepared market.
 
 | Step | Receipt |
 | --- | --- |
-| Deploy SettlementGate | [0xb42a8e…1c28bdc](https://genlayer-explorer.vercel.app/tx/0xb42a8e932069559416f67d450aa233e2776e17704be13df82037cb4dd1c28bdc) · `FINALIZED / SUCCESS` |
-| Deploy MetalSwap | [0x2fd9a9…981e4b7](https://genlayer-explorer.vercel.app/tx/0x2fd9a91733205a1ddfd5d923375791add8b0d7940b9be3522ac611647981e4b7) · `FINALIZED / SUCCESS` |
-| Bind gate → market | [0x172604…01393e](https://genlayer-explorer.vercel.app/tx/0x1726045eba6f7b6c86fc9dc27b7b38362a615eb0f49ea11fe0df2be04a01393e) · `FINALIZED / SUCCESS` |
-| Bind market → gate | [0x8191cb…20530ff](https://genlayer-explorer.vercel.app/tx/0x8191cbd648a58956333af57ca72067e86b92931fb0fb7fa804c39d61120530ff) · `FINALIZED / SUCCESS` |
-| Freeze evidence source | [0x57747f…29c531](https://genlayer-explorer.vercel.app/tx/0x57747f1ed3ecff7d3056c8416712a32cc704b70b9967fe2090de91b77129c531) · `FINALIZED / SUCCESS` |
-| Open `market-2026-09-14T07:30:00Z` | [0x7a00a6…e287a](https://genlayer-explorer.vercel.app/tx/0x7a00a6677f38928819bb2f882b68bb626446771fc62153b6d9232d1855ce287a) · `FINALIZED / SUCCESS` |
+| Deploy SettlementGate | [0x17c7cf…1a030](https://genlayer-explorer.vercel.app/tx/0x17c7cf6c4cfc3b237a9de433850574cb72386d7f9b81acc074bccbd99131a030) · `FINALIZED / SUCCESS` |
+| Deploy MetalSwap | [0x6a8416…27cd7](https://genlayer-explorer.vercel.app/tx/0x6a84169ecc236d1dfbc0ee1dd0cc9c3f34ed37901562bb9230e66800d2427cd7) · `FINALIZED / SUCCESS` |
+| Bind gate → market | [0x25dbf1…529c](https://genlayer-explorer.vercel.app/tx/0x25dbf1d35fcea3b34e69152222d7c1c8da5570b2ab5011e9bcd6825ba51e529c) · `FINALIZED / SUCCESS` |
+| Bind market → gate | [0x9ced6e…a21](https://genlayer-explorer.vercel.app/tx/0x9ced6e0d1fe88a278076cc838704c24992ea55601dd1a18951a83c6ff9c68a21) · `FINALIZED / SUCCESS` |
+| Freeze XAUS source | [0xddba10…cf8f6](https://genlayer-explorer.vercel.app/tx/0xddba10e5420a5eaf1162d838eea945653fcada965e3e0af70ec4a98c605cf8f6) · `FINALIZED / SUCCESS` |
+| Open `market-2026-09-14T10:15:00Z` | [0xd564e5…afe43](https://genlayer-explorer.vercel.app/tx/0xd564e5b77182b977486e8ad2fa14644dc85cbb0d0ce166ec9c2491c1f3cafe43) · `FINALIZED / SUCCESS` |
 
-The opening readback was observed at `2026-09-14T07:18:26.665Z`: start `07:30:00Z`, end `07:45:00Z`, settlement deadline `07:55:00Z`, status `UPCOMING`, and both pools at zero.
+Deployment-time readback: start `2026-09-14T10:15:00Z`, end `10:30:00Z`, settlement deadline `10:40:00Z`, source mode `XAUS_INDICATIVE_HISTORICAL_REPLAY`, source history `48h`, price scale `1_000_000`, maximum gap `180s`, maximum cross-metal skew `60s`, and `finalized_markets=0`. The prepared market had zero stake, zero evidence, and `AWAITING_SETTLEMENT` at that readback. No XAUS-backed wager or settlement is claimed.
 
-## Completed market proof
+## Public XAUS comparison case
 
-Market: [`market-2026-09-14T07:30:00Z`](https://metal-swap.vercel.app/evidence/market-2026-09-14T07:30:00Z.json)
+Case: [xaus-2026-09-14-09-00-00z](https://metal-swap.vercel.app/comparison/xaus-2026-09-14-09-00-00z)
 
-- Interval: `2026-09-14T07:30:00Z → 07:45:00Z`
-- Funded pools: `GOLD=25`, `SILVER=25`, `total_staked=50`
-- Public evidence response after expiry: `FINALIZED`
-- Evidence hash: `sha256:866d6458d151cb8de0c0067cad14671657855878770cebef0e55ac8c3335c23d`
-- Boundary values: Gold `2,371,000,000 → 2,371,700,000`; Silver `28,310,000 → 28,420,000`
-- Outcome: `SILVER`
-- Fee: `1` credit; distributable pool: `49` credits
-- Settlement receipt: [0x77f9b0…0487f](https://genlayer-explorer.vercel.app/tx/0x77f9b06920f64204b163ab3214e5b9e5299a7a5a033fe314dba951e60e40487f) · `FINALIZED`, `MAJORITY_AGREE`, successful contract execution
-- Gate readback: `finalized=true`, `finalized_at=2026-09-14T07:46:17.148801Z`, same outcome/hash/payload, `finalized_markets=1`
-- Payout receipt: [0x8a4a12…5eddb2](https://genlayer-explorer.vercel.app/tx/0x8a4a122e4a93431c5a35436d695bb8337a241009beaf011b8b80a5cef75eddb2) · `FINALIZED`, `MAJORITY_AGREE`, successful contract execution
-- Payout readback: Silver stake `25`, `claimed=true`, payout `49`; market `claimed_amount=49`
-- Duplicate claim: [0xbea5d8…367ae4](https://genlayer-explorer.vercel.app/tx/0xbea5d8c7f671b661d750d7ef68ea81e28a632301bfdf15e0f7c0eaed05367ae4) · `FINALIZED`, execution rejected with `[EXPECTED] position already claimed`
+- Mode: `HISTORICAL_REPLAY`; comparison-only, no pool or claim.
+- Interval: `2026-09-14T09:00:00Z → 2026-09-14T09:15:00Z`.
+- Source capture: `2026-09-14T09:36:02Z`.
+- Gold (`XAUUSD`, USD/troy oz): `4305.100098` at `08:58:02Z` → `4307.600098` at `09:14:02Z`.
+- Silver (`XAGUSD`, USD/troy oz): `63.307999` at `08:58:02Z` → `63.294998` at `09:14:02Z`.
+- Selection: latest published point at or before each boundary.
+- Actual maximum boundary staleness: `118s`; actual cross-metal skew: `0s`.
+- Display-only returns: Gold approximately `+0.06%`; Silver approximately `−0.02%`.
+- Exact decision products: `gold_close × silver_open = 272705542696583902`; `silver_close × gold_open = 272491302092709804`; Gold is higher and therefore outperforms.
+- Canonical evidence hash: `sha256:c140120075b4319ae799c64e4dfef4fc21589e363f093fa4611279d8eeca7692`.
+- Source responses: [XAU](https://xaus.com/api/v1/intraday?symbol=xau&hours=48), [XAG](https://xaus.com/api/v1/intraday?symbol=xag&hours=48), [terms/API policy](https://xaus.com/api/).
 
-Supporting live transaction receipts:
+The source was externally reachable and returned HTTP 200 JSON during the capture. A later verification probe returned HTTP 503, so this page remains an archived observation replay and does not claim live-source availability. The provider's terms are the authority for its indicative/non-executable limitation.
 
-| Action | Receipt |
-| --- | --- |
-| First account claims demo credits | [0x629f34…0e55c](https://genlayer-explorer.vercel.app/tx/0x629f3405166bc4d506090df5692c22e96875bc54e085232594b86f85e110e55c) · `FINALIZED / SUCCESS` |
-| Second account claims demo credits | [0x59e599…e23983](https://genlayer-explorer.vercel.app/tx/0x59e599729913ca6cb063c27c10b01b55bab4992a6b33bc7164ce738979e23983) · `FINALIZED / SUCCESS` |
-| Silver position | [0x10225b…69bd37](https://genlayer-explorer.vercel.app/tx/0x10225b4828769ab9744a917a8e7cf2148cd275505a73140a95cf7005c369bd37) · `FINALIZED / SUCCESS` |
-| Gold position | [0x62c8d3…2d0e74](https://genlayer-explorer.vercel.app/tx/0x62c8d3e9d1f30c9cbfaf6f1bf0f63519570bc539af6744db6a6ff6c2642d0e74) · `FINALIZED / SUCCESS` |
-| Finality callback from settlement | included in [0x77f9b0…0487f](https://genlayer-explorer.vercel.app/tx/0x77f9b06920f64204b163ab3214e5b9e5299a7a5a033fe314dba951e60e40487f) |
-| Silver payout | [0x8a4a12…5eddb2](https://genlayer-explorer.vercel.app/tx/0x8a4a122e4a93431c5a35436d695bb8337a241009beaf011b8b80a5cef75eddb2) |
-| Intentional duplicate claim | [0xbea5d8…367ae4](https://genlayer-explorer.vercel.app/tx/0xbea5d8c7f671b661d750d7ef68ea81e28a632301bfdf15e0f7c0eaed05367ae4) |
+## Preserved synthetic mechanics demonstration
 
-## Rotation and historical access
+Case: [market-2026-09-14T07:30:00Z evidence](https://metal-swap.vercel.app/evidence/market-2026-09-14T07:30:00Z.json) and [wallet-free proof](https://metal-swap.vercel.app/comparison/metalswap-synthetic-2026-09-14-07-30-00z)
 
-The owner rotated the completed market with [0x49b1b2…089dc4](https://genlayer-explorer.vercel.app/tx/0x49b1b2e1eb7a04fa87d0d7120c63aa1aef6022fe0b3f40bf99c6f59547089dc4), observed `FINALIZED / SUCCESS`, returning `market-2026-09-14T08:00:00Z`. The new current market was `UPCOMING` with zero stake, while the old Silver position remained queryable after rotation with `claimed=true`, `stake=25`, and `payout=49`. The public UI visibly listed both markets and allowed selection of the finalized historical row; a wallet-connected view exposes the old position and claim control.
+- Previous source revision: `6a31ea0ca02d7f08ae8c67f7fa6cd1384d4e05c1`.
+- Previous MetalSwap: `0x04d331073ba620FC165Cf7841e71e9F1270f44c7`.
+- Previous SettlementGate: `0x7EfCc55ccD29Eb63bf727e5b5213a1D44c450759`.
+- Interval: `07:30:00Z → 07:45:00Z`; settlement deadline `07:55:00Z`.
+- Funded pools: `GOLD=25`, `SILVER=25`, `total_staked=50` demo credits.
+- Synthetic evidence hash: `sha256:866d6458d151cb8de0c0067cad14671657855878770cebef0e55ac8c3335c23d`.
+- Outcome: `SILVER`; fee `1`; distributable pool `49`.
+- Settlement: [0x77f9b0…0487f](https://genlayer-explorer.vercel.app/tx/0x77f9b06920f64204b163ab3214e5b9e5299a7a5a033fe314dba951e60e40487f) · `FINALIZED / SUCCESS`.
+- Gate acknowledgment: included in the settlement callback; finality readback `finalized=true`, `finalized_markets=1` at `2026-09-14T07:46:17.148801Z`.
+- Payout: [0x8a4a12…5eddb2](https://genlayer-explorer.vercel.app/tx/0x8a4a122e4a93431c5a35436d695bb8337a241009beaf011b8b80a5cef75eddb2) · Silver paid `49` credits · `FINALIZED / SUCCESS`.
+- Duplicate claim rejection: [0xbea5d8…367ae4](https://genlayer-explorer.vercel.app/tx/0xbea5d8c7f671b661d750d7ef68ea81e28a632301bfdf15e0f7c0eaed05367ae4) · `FINALIZED`, expected error `[EXPECTED] position already claimed`.
+- Rotation and historical readback: [0x49b1b2…089dc4](https://genlayer-explorer.vercel.app/tx/0x49b1b2e1eb7a04fa87d0d7120c63aa1aef6022fe0b3f40bf99c6f59547089dc4), with the old Silver position still readable after the new market opened.
 
 ## What validators actually verify
 
-- The owner freezes one HTTPS evidence origin and the contract records the exact market URL.
-- Each nondeterministic read requires a 2xx HTTP status, a non-empty body, a UTF-8 body no larger than 16 KiB, valid JSON, exact four-observation fields, bounded strings, positive bounded integer prices, exact boundary timestamps, gap/skew limits, and a canonical SHA-256 payload hash.
-- Consensus closures receive ordinary snapshotted values only; they do not capture `self` or storage-backed `Market` objects.
-- Deterministic contract code performs the relative-return cross multiplication, equal/one-sided/deadline refunds, fixed fee, pool conservation, proportional floor payout, cutoff and owner checks.
-- Claims require a matching `SettlementGate` record from the authenticated market contract. The gate is idempotent for an identical payload and rejects conflicting retries; `retry_finality` re-emits only the exact stored payload when needed.
-- Position history is indexed per owner and read through bounded pages, so both sides of one market remain visible across a page boundary.
+- The owner-only frozen source and exact market evidence URL.
+- Successful 2xx transport, non-empty UTF-8 body no larger than 16 KiB, valid JSON, bounded point count, exact symbols/currency/unit/hours/interval, fresh sampler state, ordered timestamps, positive six-decimal prices, and bounded coverage.
+- Latest-at-or-before boundary selection, maximum `180s` boundary gap, maximum `60s` cross-metal timestamp skew, recomputed gap/skew fields, and canonical SHA-256 payload matching.
+- Independent `xau` and `xag` reads by leader and validator; disagreement, missing data, malformed data, or source failure remains pending.
+- Snapshot ordinary values before consensus closures; no `self` or storage-backed Market object is captured.
+- Deterministic relative-return cross multiplication, equal/one-sided/deadline refunds, fee and pool conservation, proportional floor payout, cutoff enforcement, owner-only opening, authenticated finality, idempotent finality retry, pagination, and duplicate-claim rejection.
 
-## Test status and limitations
+## Test and readiness status
 
-- Direct mocked regression suite: `18 passed` (deadline ordering, transport/truncation, evidence bounds, pagination, historical reads, arithmetic, refunds, finality gating, owner-only opening).
-- Contract lint/validation: MetalSwap and SettlementGate passed.
-- Frontend typecheck and production build: passed.
-- Browser smoke suite: `4 passed`.
-- Live behavior: fresh StudioNet deployment, two demo-credit positions, expiry, public synthetic evidence fetch, finalized settlement, gate acknowledgment, payout, duplicate-claim rejection, rotation, and historical readback were all observed above.
+- Direct focused regression suite: `26 passed`.
+- Contract lint, validation, typecheck, and schema checks: passed.
+- Frontend typecheck, production build, and Playwright browser suite: passed (`6 passed`).
+- Live synthetic behavior: expiry, settlement, finality gate, 49-credit payout, duplicate rejection, rotation, and old-position readback observed on StudioNet.
+- Fresh XAUS deployment: binding/source/readback receipts observed as `FINALIZED / SUCCESS`; no XAUS-backed market was funded or settled.
 
-This is a controlled mechanics demonstration only. The evidence generator is public, synthetic, deterministic, and predictable; delaying its endpoint does not make outcomes unpredictable. Demo credits are not USDC or real funds. The prototype is not fair trading, real-price verification, custody, leverage, AMM, or order-book infrastructure. Real-price trading is not ready until an independently retrievable, settlement-grade XAU/XAG source is proven end to end.
+Synthetic outcomes are public, developer-generated, deterministic, and predictable; delayed publication does not make them unpredictable. Demo credits are not USDC or real funds. This package is a controlled mechanics demonstration and an independently sourced historical comparison, not fair trading, executable pricing, official benchmark settlement, or a real-price trading product.
 
-## Raw readback
-
-The full observed deployment record and post-demo proof are in [`last-deployment.json`](last-deployment.json). Portal copy is in [`PORTAL_DESCRIPTION.md`](PORTAL_DESCRIPTION.md).
+The machine-readable record is [`last-deployment.json`](last-deployment.json). Paste-ready Portal copy is [`PORTAL_DESCRIPTION.md`](PORTAL_DESCRIPTION.md).

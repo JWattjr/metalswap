@@ -1,8 +1,23 @@
 # MetalSwap
 
-MetalSwap is a focused GenLayer testnet prototype for one question: over the next UTC quarter-hour, does gold or silver deliver the stronger relative return?
+MetalSwap is a focused GenLayer testnet prototype for one question: over a 15-minute UTC interval, does gold or silver deliver the stronger relative return? It keeps one pair (Gold versus Silver), one interval length, and demo-credit pari-mutuel mechanics.
 
-The interface is deliberately terminal-like: one market, one entry decision, one settlement path. The current build is a synthetic-evidence demo until a settlement-grade, validator-retrievable market feed is proven end to end. Synthetic values are labelled in the UI, and no live liquidity, volume, history, or real-price evidence is implied. Deployment addresses and receipts are recorded separately in [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md).
+The current StudioNet deployment freezes XAUS's public XAU/USD and XAG/USD intraday series as a named, indicative historical-replay source. The public comparison case is not a live wager and the provider does not describe these quotes as settlement-grade or executable. The completed synthetic mechanics demonstration remains available as a separate proof case.
+
+## Public package
+
+- App: [metal-swap.vercel.app](https://metal-swap.vercel.app)
+- Repository: [github.com/JWattjr/metalswap](https://github.com/JWattjr/metalswap)
+- Public XAUS comparison: [Gold vs Silver replay](https://metal-swap.vercel.app/comparison/xaus-2026-09-14-09-00-00z)
+- Preserved synthetic mechanics proof: [completed market proof](https://metal-swap.vercel.app/comparison/metalswap-synthetic-2026-09-14-07-30-00z)
+- Exact deployment and receipt record: [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md)
+
+Current XAUS-bound pair on GenLayer StudioNet:
+
+- MetalSwap: `0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6`
+- SettlementGate: `0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131`
+- Open market at deployment readback: `market-2026-09-14T10:15:00Z`
+- Source revision used for the pair: [`3adc8ec0bc2a29173db8fcac9f49cc588e3b0041`](https://github.com/JWattjr/metalswap/commit/3adc8ec0bc2a29173db8fcac9f49cc588e3b0041)
 
 ## What is implemented
 
@@ -10,25 +25,50 @@ The interface is deliberately terminal-like: one market, one entry decision, one
 - GOLD / SILVER selection and a fully funded pari-mutuel demo-credit pool.
 - A 2% fee frozen in the contract before markets open.
 - Four-observation evidence schema: gold open/close and silver open/close.
+- XAUS paired-source mode: two independent validator HTTP reads, one `xau` response and one `xag` response, with exact USD/troy-ounce checks.
 - Exact integer comparison:
 
   `gold_close * silver_open` versus `silver_close * gold_open`
 
   This avoids floating-point return drift. Equal cross-products refund both sides without a fee.
+- Strict transport, UTF-8 byte, JSON, instrument, unit, freshness, ordering, positive-price, staleness, timestamp-skew, and canonical-hash validation.
 - Independent validator reads through `gl.vm.run_nondet_unsafe`; disagreement or invalid evidence remains pending.
 - A frozen settlement deadline and deterministic fee-free deadline refund path.
 - A separate `SettlementGate` contract. Claims require a matching finality record from the market contract and are not enabled by an `Accepted`/provisional result.
+- Paginated on-chain history and historical-position inspection after market rotation.
+- Wallet-free, stable comparison URLs showing the four observations, alignment checks, arithmetic, source references, and (for the synthetic case) settlement receipts.
+- Wallet network checks, account-change handling, bounded finality polling, and explicit submitted/provisional/finalized transaction states.
 - Local replay mode so the product can be inspected without a wallet or deployment.
-- Wallet network checks, account-change handling, and explicit submitted/provisional/finalized transaction states.
-- A dynamic synthetic evidence endpoint at `/evidence/<market-id>.json`.
 
 Demo credits are accounting units for the prototype. They are not USDC, do not represent custody or physical metal, and do not involve leverage or liquidation.
 
-## Data feasibility decision
+## Paired source and frozen policy
 
-Real data was checked before choosing the fallback. XAUS provides public no-key intraday XAU and XAG observations, but describes them as indicative mid-market values and retains only a short history; that is not enough to call the feed settlement-grade without additional validation. AlyawmGold exposes both metals but its public historical endpoints are daily/monthly/yearly, not the required 15-minute boundary series. The app therefore ships with an explicit synthetic evidence mode rather than presenting an unverified live feed as fact.
+The current source is [XAUS](https://xaus.com/api/), using the public no-key endpoints [XAU](https://xaus.com/api/v1/intraday?symbol=xau&hours=48) and [XAG](https://xaus.com/api/v1/intraday?symbol=xag&hours=48). XAUS documents UTC timestamps, two-minute sampling, short historical retention, and indicative mid-market values. It also states that the data is not settlement-grade, executable, or contractual. MetalSwap therefore presents the real-source material as an archived historical comparison, not fair live trading or official benchmark settlement.
 
-The evidence contract keeps the replacement seam narrow: latest observation at or before each exact boundary, maximum observation gap, maximum cross-metal timestamp skew, strict schema, canonical hash, and deterministic conflict handling. A real source must satisfy those checks and be reachable by validators before the demo source is replaced.
+The source identity and policy are frozen before entry:
+
+- Instruments: `XAUUSD` and `XAGUSD`.
+- Convention: USD per troy ounce, fixed-point scale `1_000_000`.
+- Interval: 900 seconds, UTC quarter-hour boundaries.
+- Selection: latest source point at or before each opening/closing boundary.
+- Maximum boundary staleness: 180 seconds.
+- Maximum cross-metal timestamp skew: 60 seconds at each boundary.
+- Missing, stale, malformed, conflicting, wrong-unit, wrong-instrument, non-2xx, truncated, or oversized evidence stays pending and can only reach the fee-free deadline refund.
+
+The validators fetch both source responses independently. The hosted comparison JSON is proof material for people; it is not used as contract evidence. See [`docs/DATA_FEASIBILITY.md`](docs/DATA_FEASIBILITY.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Contract lifecycle
+
+1. The owner freezes the source base URL and finality-gate address.
+2. The owner opens a bounded future UTC quarter-hour market.
+3. Users claim demo credits and place GOLD or SILVER positions before start.
+4. After expiry, anyone requests settlement. Validators independently fetch and validate the same four-field evidence record.
+5. Invalid, missing, or conflicting evidence stays pending. If the frozen deadline passes, positions refund without a fee.
+6. A valid result is recorded as provisional and sent to `SettlementGate` with `on="finalized"`.
+7. Only after a matching finality record exists can users claim a proportional payout. Payouts floor at the smallest demo-credit unit; dust remains undistributed.
+
+The market contract never performs arithmetic with an LLM. The non-deterministic boundary is evidence retrieval and agreement; the outcome, fee, pool conservation, and payout math are deterministic contract code.
 
 ## Run locally
 
@@ -55,69 +95,32 @@ NEXT_PUBLIC_GENLAYER_EXPLORER_URL=<optional-explorer-base>
 
 The UI only enters wallet-backed mode when `NEXT_PUBLIC_METALSWAP_ADDRESS` is set. Transaction hashes are shown as provisional / awaiting finality; a receipt link is not treated as a claim authorization.
 
-## Contract lifecycle
-
-1. Owner freezes the source base URL and finality-gate address.
-2. The owner opens a bounded future UTC quarter-hour market.
-3. Users claim demo credits and place GOLD or SILVER positions before start.
-4. After expiry, anyone requests settlement. Validators independently fetch and validate the same four-field evidence record.
-5. Invalid, missing, or conflicting evidence stays pending. If the frozen deadline passes, positions refund without a fee.
-6. A valid result is recorded as provisional and sent to `SettlementGate` with `on="finalized"`.
-7. Only after a matching finality record exists can users claim a proportional payout. Payouts floor at the smallest demo-credit unit; dust remains undistributed.
-
-The market contract never performs arithmetic with an LLM. The non-deterministic boundary is evidence retrieval and agreement; the outcome, fee, pool conservation, and payout math are deterministic contract code.
-
 ## Checks
 
 ```powershell
 npm run typecheck
 npm run build
 npm run lint:contract
-& "..\\covenant-sentinel\\.venv\\Scripts\\python.exe" -m pytest tests\\direct -v
+python -m pytest tests\direct -q
 npm run test:e2e
 ```
 
-The direct suite covers both metals rising/falling, equal relative returns, one-sided refunds, cutoff enforcement, malformed/missing evidence, bounded owner-only opening, and the claim failure before a matching finality record exists. The Playwright suite covers local replay, accessible entry controls, and the rule that future evidence is not published before expiry. The wired two-contract flow is covered in `tests/integration/test_metalswap_flow.py` and requires a live/local GenLayer RPC plus `METALSWAP_INTEGRATION_SOURCE_BASE_URL`.
+The direct suite covers both metals rising/falling, equal relative returns, a less-falling metal winning, one-sided and deadline refunds, cutoff enforcement, malformed/missing/oversized/non-2xx evidence, source alignment, pagination, historical reads, finality gating, duplicate claims, and owner-only opening. The Playwright suite covers local replay, accessible entry controls, evidence-route visibility, and both public comparison pages. The wired integration flow requires a live/local GenLayer RPC plus `METALSWAP_INTEGRATION_SOURCE_BASE_URL`.
+
+## Demonstration status
+
+The preserved synthetic StudioNet demonstration funded GOLD and SILVER with 25 demo credits each, settled to SILVER, finalized the gate, paid 49 credits, rejected a duplicate claim, rotated the market, and retained the old position. Its exact receipts are linked from the [synthetic proof page](https://metal-swap.vercel.app/comparison/metalswap-synthetic-2026-09-14-07-30-00z) and [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md).
+
+The fresh XAUS-bound pair was deployed and read back with all deployment, binding, source-freeze, and market-open receipts `FINALIZED / SUCCESS`. Its deployment-time market was unfunded, so no historical XAUS result was wagered on or settled. The public XAUS page is a comparison-only replay of externally published observations. A later source probe returned HTTP 503; no live interval is claimed while the provider is unavailable.
+
+This is a controlled mechanics demonstration, not fair trading, live-price verification, custody, or real-money trading. Synthetic outcomes are public, developer-generated, deterministic, and predictable; delaying publication does not make them unpredictable. Real-price trading is not ready until a validator-retrievable, settlement-grade XAU/XAG source is proven end to end.
 
 ## Deployment notes
 
-The repository includes `deploy/deployScript.ts` as a guarded deployment/readback script. It deploys `SettlementGate` and `MetalSwap`, wires the addresses, freezes the source URL, opens the next market, and writes only observed deployment data to `deploy/last-deployment.json`. It must be run only after the frontend is hosted at the exact HTTPS origin used in the evidence URL.
+The guarded [`deploy/deployScript.ts`](deploy/deployScript.ts) deploys `SettlementGate` and `MetalSwap`, wires the addresses, freezes the source URL, opens the next market, verifies finalized/successful receipts, and writes observed data to [`deploy/last-deployment.json`](deploy/last-deployment.json). Portal submission is intentionally not automated.
 
-Before calling a build testnet-ready, record:
-
-- network name and RPC used;
-- market and gate addresses;
-- deployment and configuration transaction hashes;
-- lifecycle state for each transaction, including protocol finality where relevant;
-- a readback of the frozen source URL, fee, rule version, market interval, and finality gate.
-
-Portal submission is intentionally not automated by this project.
-
-For the linked Vercel project, deploy from the Next.js app directory so Vercel
-uses `frontend/.next` as its framework output:
+For the linked Vercel project, deploy from the Next.js app directory:
 
 ```powershell
 vercel --prod --yes --cwd frontend
 ```
-
-The current observed addresses and finalized deployment receipts are recorded in [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md); the machine-readable readback is in `deploy/last-deployment.json`.
-
-## Submission-ready demonstration
-
-The current public build is [metal-swap.vercel.app](https://metal-swap.vercel.app), and the source is [github.com/JWattjr/metalswap](https://github.com/JWattjr/metalswap). The deployed contract source is revision `6a31ea0ca02d7f08ae8c67f7fa6cd1384d4e05c1` on GenLayer Studio Network:
-
-- MetalSwap: `0x04d331073ba620FC165Cf7841e71e9F1270f44c7`
-- SettlementGate: `0x7EfCc55ccD29Eb63bf727e5b5213a1D44c450759`
-- Completed market: [`market-2026-09-14T07:30:00Z`](https://metal-swap.vercel.app/evidence/market-2026-09-14T07:30:00Z.json)
-- Rotated current market: `market-2026-09-14T08:00:00Z`
-
-The observed 15-minute demonstration funded GOLD and SILVER with 25 demo credits each, waited for the stored `07:45:00Z` boundary, settled to SILVER, acknowledged finality in SettlementGate, paid 49 credits to the Silver position, rejected the repeated claim with `[EXPECTED] position already claimed`, and opened the next market. Exact receipts, readbacks, and links are in [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md) and [`deploy/last-deployment.json`](deploy/last-deployment.json); the paste-ready Portal text is [`deploy/PORTAL_DESCRIPTION.md`](deploy/PORTAL_DESCRIPTION.md).
-
-This is a controlled mechanics demonstration, not fair trading, live price verification, or real-money trading. The evidence endpoint is public, synthetic, deterministic, and predictable; the balances are demo-credit accounting units. No real-price trading is ready until a validator-retrievable settlement-grade XAU/XAG source is proven end to end. The direct regression suite uses mocked HTTP responses; the deployment and payout path above were demonstrated live on StudioNet.
-
-## Primary references
-
-- [GenLayer finality](https://docs.genlayer.com/understand-genlayer-protocol/core-concepts/optimistic-democracy/finality)
-- [GenLayer finalized messages](https://docs.genlayer.com/developers/intelligent-contracts/features/messages)
-- [XAUS API feasibility reference](https://xaus.com/api/)
-- [AlyawmGold developer API](https://alyawmgold.com/developers)

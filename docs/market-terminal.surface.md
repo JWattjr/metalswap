@@ -1,6 +1,6 @@
 # MetalSwap market terminal
 
-Mode: Operate. Scope: one responsive home surface for observing the current synthetic replay, entering the next UTC quarter-hour market, and inspecting claims/evidence.
+Mode: Operate. Scope: one responsive home surface for observing the current paired-source comparison or synthetic replay, entering the next UTC quarter-hour market, and inspecting claims/evidence.
 
 ## Direction contract
 
@@ -11,4 +11,4 @@ FIRST VIEWPORT: Persistent header; wide left chart with interval rail and split 
 FORM: Split assay bench, grounded fallback because the installed Impeccable launcher exposes no concept-seed command; seed key: unavailable.
 FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance
 
-Unresolved: a real validator-retrievable historical feed remains open; the verified synthetic deployment addresses and finalized configuration receipts are recorded in `deploy/DEPLOYMENT.md`.
+The XAUS pair is validator-retrievable for a named historical replay, but the provider describes it as indicative and non-executable; the completed synthetic deployment and fresh XAUS bindings are recorded in `deploy/DEPLOYMENT.md`.
