@@ -37,8 +37,10 @@ import type {
   ChainPositionView,
   ContractAccount,
   ContractMarket,
+  ContractMarketPage,
   ContractNumber,
   ContractPosition,
+  ContractPositionPage,
   ClaimQuote,
   LocalPosition,
   ProtocolConfig,
@@ -58,6 +60,8 @@ import {
 const GOLD = "GOLD" as const;
 const SILVER = "SILVER" as const;
 const U256_MAX = (1n << 256n) - 1n;
+const POSITION_PAGE_SIZE = 20n;
+const HISTORY_PAGE_SIZE = 25n;
 
 type SessionMode = "idle" | "local" | "contract";
 
@@ -258,6 +262,16 @@ export default function MetalSwapTerminal() {
   const [localPools, setLocalPools] = useState<PoolState>({ GOLD: 0n, SILVER: 0n });
   const [localPositions, setLocalPositions] = useState<LocalPosition[]>([]);
   const [contractPositions, setContractPositions] = useState<ChainPositionView[]>([]);
+  const [positionNextOffset, setPositionNextOffset] = useState(0n);
+  const [positionsHaveMore, setPositionsHaveMore] = useState(false);
+  const [historyMarkets, setHistoryMarkets] = useState<ContractMarket[]>([]);
+  const [historyNextOffset, setHistoryNextOffset] = useState(0n);
+  const [historyHasMore, setHistoryHasMore] = useState(false);
+  const [historyReadState, setHistoryReadState] = useState<"loading" | "ready" | "empty" | "unavailable">("loading");
+  const [historyReadError, setHistoryReadError] = useState("");
+  const [selectedHistoryMarketId, setSelectedHistoryMarketId] = useState("");
+  const [selectedHistoryPositionViews, setSelectedHistoryPositionViews] = useState<ChainPositionView[]>([]);
+  const [historyDetailLoading, setHistoryDetailLoading] = useState(false);
   const [selectedSide, setSelectedSide] = useState<Side>(SILVER);
   const [stakeAmount, setStakeAmount] = useState("25");
   const [txState, setTxState] = useState<TransactionState>("IDLE");
@@ -298,6 +312,9 @@ export default function MetalSwapTerminal() {
         const address = walletEventAccount(value);
         setContractAccount(null);
         setContractPositions([]);
+        setPositionNextOffset(0n);
+        setPositionsHaveMore(false);
+        setSelectedHistoryPositionViews([]);
         setTxState("IDLE");
         setTxHash("");
         if (!address) {
@@ -316,6 +333,8 @@ export default function MetalSwapTerminal() {
           setWrongNetwork(!matches);
           setContractAccount(null);
           setContractPositions([]);
+          setPositionNextOffset(0n);
+          setPositionsHaveMore(false);
           if (matches) {
             setErrorMessage("");
             setStatusMessage("Wallet is back on the configured GenLayer network.");
@@ -411,6 +430,65 @@ export default function MetalSwapTerminal() {
   const displayStatus = mode === "local"
     ? (isEntryOpen ? "UPCOMING" : referenceNow < activeEnd.valueOf() ? "LIVE" : "AWAITING_SETTLEMENT")
     : contractMarket?.status || (hasDeployment() ? "READING MARKET" : "SYNTHETIC REPLAY");
+  const selectedHistoryMarket = useMemo(
+    () => historyMarkets.find((market) => market.market_id === selectedHistoryMarketId) ?? null,
+    [historyMarkets, selectedHistoryMarketId],
+  );
+
+  const enrichPositions = useCallback(async (
+    rawPositions: ContractPosition[],
+    owner: string,
+  ): Promise<ChainPositionView[]> => Promise.all(rawPositions.map(async (position): Promise<ChainPositionView> => {
+    if (!position.market_id || !position.side) return { position, market: null, quote: null };
+    try {
+      const [positionMarket, quoteValue] = await Promise.all([
+        readContract("get_market", [position.market_id]),
+        readContract("get_claim_quote", [position.market_id, owner, position.side]),
+      ]);
+      return {
+        position,
+        market: record<ContractMarket>(positionMarket),
+        quote: record<ClaimQuote>(quoteValue),
+      };
+    } catch {
+      return { position, market: null, quote: null };
+    }
+  })), []);
+
+  const loadHistoryPage = useCallback(async (offset: bigint, append: boolean) => {
+    setHistoryReadState("loading");
+    if (!append) setHistoryReadError("");
+    try {
+      const pageValue = await readContract("get_market_ids", [offset, HISTORY_PAGE_SIZE]);
+      const page = record<ContractMarketPage>(pageValue);
+      const ids = rawList(pageValue, "market_ids")
+        .filter((value): value is string => typeof value === "string");
+      const markets = await Promise.all(ids.map(async (id) => {
+        try {
+          return record<ContractMarket>(await readContract("get_market", [id]));
+        } catch {
+          return null;
+        }
+      }));
+      const resolved = markets.filter((value): value is ContractMarket => Boolean(value?.market_id));
+      setHistoryMarkets((current) => {
+        const merged = append ? [...current] : [];
+        const seen = new Set(merged.map((market) => market.market_id));
+        for (const market of resolved) {
+          if (market.market_id && !seen.has(market.market_id)) merged.push(market);
+        }
+        return merged;
+      });
+      const nextOffset = toBigInt(page.next_offset) ?? offset + BigInt(ids.length);
+      const total = toBigInt(page.total);
+      setHistoryNextOffset(nextOffset);
+      setHistoryHasMore(page.has_more ?? (total !== null && nextOffset < total));
+      setHistoryReadState(offset === 0n && resolved.length === 0 ? "empty" : "ready");
+    } catch (error) {
+      setHistoryReadState("unavailable");
+      setHistoryReadError(error instanceof Error ? error.message : "On-chain market history is unavailable.");
+    }
+  }, []);
 
   const refreshContract = useCallback(async () => {
     if (!hasDeployment()) return;
@@ -426,36 +504,27 @@ export default function MetalSwapTerminal() {
         const market = record<ContractMarket>(marketValue);
         setContractMarket(market);
         setProtocolConfig({ ...demoConfig, ...record<ProtocolConfig>(configValue) });
+        await loadHistoryPage(0n, false);
         if (walletAddress && mode === "contract") {
           await assertWalletNetwork();
           setWrongNetwork(false);
           const [accountValue, positionsValue] = await Promise.all([
             readContract("get_account", [walletAddress]),
-            readContract("get_user_positions", [walletAddress, 0n, 50n]),
+            readContract("get_user_positions", [walletAddress, 0n, POSITION_PAGE_SIZE]),
           ]);
           const account = record<ContractAccount>(accountValue);
+          const positionPage = record<ContractPositionPage>(positionsValue);
           const rawPositions = rawList(positionsValue, "positions").map((value) => record<ContractPosition>(value));
-          const enriched = await Promise.all(rawPositions.map(async (position): Promise<ChainPositionView> => {
-            if (!position.market_id || !position.side) return { position, market: null, quote: null };
-            try {
-              const [positionMarket, quoteValue] = await Promise.all([
-                readContract("get_market", [position.market_id]),
-                readContract("get_claim_quote", [position.market_id, walletAddress, position.side]),
-              ]);
-              return {
-                position,
-                market: record<ContractMarket>(positionMarket),
-                quote: record<ClaimQuote>(quoteValue),
-              };
-            } catch {
-              return { position, market: null, quote: null };
-            }
-          }));
+          const enriched = await enrichPositions(rawPositions, walletAddress);
           setContractAccount(account);
           setContractPositions(enriched);
+          setPositionNextOffset(toBigInt(positionPage.next_offset) ?? BigInt(rawPositions.length));
+          setPositionsHaveMore(Boolean(positionPage.has_more));
         } else if (mode !== "contract") {
           setContractAccount(null);
           setContractPositions([]);
+          setPositionNextOffset(0n);
+          setPositionsHaveMore(false);
         }
       } catch (error) {
         if (error instanceof WrongNetworkError) {
@@ -476,7 +545,7 @@ export default function MetalSwapTerminal() {
     } finally {
       if (refreshInFlight.current === task) refreshInFlight.current = null;
     }
-  }, [mode, walletAddress]);
+  }, [enrichPositions, loadHistoryPage, mode, walletAddress]);
 
   useEffect(() => {
     if (!hasDeployment()) return;
@@ -484,6 +553,65 @@ export default function MetalSwapTerminal() {
     const timer = window.setInterval(() => refreshContract().catch(() => undefined), 30_000);
     return () => window.clearInterval(timer);
   }, [refreshContract]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedHistoryMarketId || mode !== "contract" || !walletAddress) {
+      setSelectedHistoryPositionViews([]);
+      setHistoryDetailLoading(false);
+      return () => { cancelled = true; };
+    }
+    setHistoryDetailLoading(true);
+    Promise.all(([GOLD, SILVER] as Side[]).map(async (side): Promise<ChainPositionView | null> => {
+      try {
+        const [positionValue, quoteValue] = await Promise.all([
+          readContract("get_position", [selectedHistoryMarketId, walletAddress, side]),
+          readContract("get_claim_quote", [selectedHistoryMarketId, walletAddress, side]),
+        ]);
+        const position = record<ContractPosition>(positionValue);
+        if (!position.exists) return null;
+        return {
+          position,
+          market: selectedHistoryMarket,
+          quote: record<ClaimQuote>(quoteValue),
+        };
+      } catch {
+        return null;
+      }
+    })).then((views: Array<ChainPositionView | null>) => {
+      if (!cancelled) setSelectedHistoryPositionViews(views.filter((view): view is ChainPositionView => Boolean(view)));
+    }).finally(() => {
+      if (!cancelled) setHistoryDetailLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [mode, selectedHistoryMarket, selectedHistoryMarketId, walletAddress]);
+
+  async function handleLoadMorePositions() {
+    if (!walletAddress || mode !== "contract" || !positionsHaveMore || isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      const pageValue = await readContract("get_user_positions", [walletAddress, positionNextOffset, POSITION_PAGE_SIZE]);
+      const page = record<ContractPositionPage>(pageValue);
+      const rawPositions = rawList(pageValue, "positions").map((value) => record<ContractPosition>(value));
+      const enriched = await enrichPositions(rawPositions, walletAddress);
+      setContractPositions((current) => {
+        const seen = new Set(current.map((view) => `${view.position.market_id}-${view.position.side}`));
+        return [...current, ...enriched.filter((view) => !seen.has(`${view.position.market_id}-${view.position.side}`))];
+      });
+      const nextOffset = toBigInt(page.next_offset) ?? positionNextOffset + BigInt(rawPositions.length);
+      setPositionNextOffset(nextOffset);
+      setPositionsHaveMore(Boolean(page.has_more));
+    } catch (error) {
+      setContractReadError(error instanceof Error ? error.message : "More positions are temporarily unavailable.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }
+
+  async function handleLoadMoreHistory() {
+    if (!historyHasMore || historyReadState === "loading") return;
+    await loadHistoryPage(historyNextOffset, true);
+  }
 
   function clearError() {
     setErrorMessage("");
@@ -608,14 +736,18 @@ export default function MetalSwapTerminal() {
 
   async function handleSettlement(marketIdToSettle: string) {
     const view = contractPositions.find((item) => item.position.market_id === marketIdToSettle);
-    const market = view?.market ?? (contractMarket?.market_id === marketIdToSettle ? contractMarket : null);
-    if (!market || !isAfter(market.end_at, referenceNow)) return;
+    const market = view?.market
+      ?? historyMarkets.find((item) => item.market_id === marketIdToSettle)
+      ?? (contractMarket?.market_id === marketIdToSettle ? contractMarket : null);
+    if (!market || !isAfter(market.end_at, referenceNow) || isAfter(market.settlement_deadline, referenceNow)) return;
     if (mode === "contract") await runWrite("request_settlement", [marketIdToSettle], "Settlement request");
   }
 
   async function handleRefund(marketIdToRefund: string) {
     const view = contractPositions.find((item) => item.position.market_id === marketIdToRefund);
-    const market = view?.market ?? (contractMarket?.market_id === marketIdToRefund ? contractMarket : null);
+    const market = view?.market
+      ?? historyMarkets.find((item) => item.market_id === marketIdToRefund)
+      ?? (contractMarket?.market_id === marketIdToRefund ? contractMarket : null);
     if (!market || !isAfter(market.settlement_deadline, referenceNow)) return;
     if (mode === "contract") await runWrite("refund_after_deadline", [marketIdToRefund], "Deadline refund");
   }
@@ -784,7 +916,7 @@ export default function MetalSwapTerminal() {
             <div className="entry-help"><CircleHelp size={14} /><span>Connect a wallet to place a contract position, or <button className="inline-action" onClick={startLocalReplay}>try a local replay</button> with clearly synthetic credits.</span></div>
           ) : null}
           {mode === "contract" && !contractEntryMarket ? (
-            <div className="entry-help"><CircleHelp size={14} /><span>{contractMarket?.status === "LIVE" ? "This market is already live; entries are locked until the next market opens." : "No upcoming contract market is open yet."}</span></div>
+            <div className="entry-help"><CircleHelp size={14} /><span>{contractMarket?.status === "LIVE" ? "This market is already live; entries are locked until the next market opens." : walletIsMarketOperator ? "Operator control: open the next market only after this interval is complete." : "Market opening is operator-controlled. Historical markets remain readable and claimable."}</span></div>
           ) : null}
 
           <div className="entry-rule" />
@@ -845,8 +977,10 @@ export default function MetalSwapTerminal() {
       <section className="lower-grid">
         <section className="panel positions-panel">
           <div className="panel-heading compact-heading"><div><h2>My positions</h2><p>Wallet-linked entries and claim availability.</p></div><span className="position-count">{formatCredits(loadedPositionCount)} total</span></div>
-          {localPositions.length === 0 && contractPositions.length === 0 ? (
-            <div className="empty-state"><div className="empty-icon"><WalletCards size={18} /></div><div><strong>No positions yet</strong><span>Choose GOLD or SILVER above to commit a prediction position for the upcoming interval.</span></div></div>
+          {mode === "contract" && isRefreshing && contractPositions.length === 0 ? (
+            <div className="empty-state"><div className="empty-icon"><RefreshCw size={18} className="spin" /></div><div><strong>Reading on-chain positions…</strong><span>Loading wallet-linked positions and claim status from GenLayer.</span></div></div>
+          ) : localPositions.length === 0 && contractPositions.length === 0 ? (
+            <div className="empty-state"><div className="empty-icon"><WalletCards size={18} /></div><div><strong>No positions yet</strong><span>{mode === "contract" ? "This wallet has no indexed on-chain positions yet." : "Choose GOLD or SILVER above to commit a prediction position for the upcoming interval."}</span></div></div>
           ) : (
             <div className="position-list">
               {localPositions.map((position) => <div className="position-row" key={position.id}><div className={`position-token ${position.side.toLowerCase()}`}><span className={`metal-swatch ${position.side === GOLD ? "gold-swatch" : "silver-swatch"}`} />{position.side}</div><div><strong>{formatCredits(position.stake)} credits</strong><span>Local replay · not on-chain</span></div><div className="position-state"><span className="state-dot" />LOCAL</div><span className="text-action disabled-action">Replay only</span></div>)}
@@ -857,8 +991,9 @@ export default function MetalSwapTerminal() {
                 const marketIdToUse = position.market_id ?? "";
                 const final = quote?.finality_status === "FINALIZED";
                 const claimable = Boolean(final && quote?.exists && !quote.claimed && quote.payout !== undefined);
-                const settlementReady = Boolean(market && ["AWAITING_SETTLEMENT", "PENDING_EVIDENCE"].includes(market.status ?? "") && isAfter(market.end_at, referenceNow));
-                const refundReady = Boolean(market && !market.outcome && isAfter(market.settlement_deadline, referenceNow));
+                const deadlineReached = Boolean(market && isAfter(market.settlement_deadline, referenceNow));
+                const settlementReady = Boolean(market && ["AWAITING_SETTLEMENT", "PENDING_EVIDENCE"].includes(market.status ?? "") && isAfter(market.end_at, referenceNow) && !deadlineReached);
+                const refundReady = Boolean(market && !market.outcome && deadlineReached);
                 const state = quote?.claimed ? "CLAIMED" : claimable ? "CLAIMABLE" : market?.status ? statusLabel(market.status) : "READING";
                 return <div className="position-row" key={`${position.market_id}-${position.side}`}>
                   <div className={`position-token ${position.side?.toLowerCase() ?? "contract"}`}><span className={`metal-swatch ${position.side === GOLD ? "gold-swatch" : "silver-swatch"}`} />{position.side ?? "POSITION"}</div>
@@ -871,14 +1006,57 @@ export default function MetalSwapTerminal() {
                 </div>;
               })}
               {contractAccount && toSafeNumber(contractAccount.position_count) > contractPositions.length ? <div className="position-row contract-summary"><div className="position-token contract"><LockKeyhole size={14} />CHAIN</div><div><strong>{formatCredits(contractAccount.position_count)} contract positions</strong><span>{formatCredits(contractAccount.total_staked)} credits staked</span></div><div className="position-state"><span className="state-dot cyan" />PARTIAL READ</div><button className="text-action" onClick={refreshContract} disabled={isRefreshing}>{isRefreshing ? "Reading…" : "Refresh"}<RefreshCw size={13} /></button></div> : null}
+              {positionsHaveMore ? <div className="history-pagination"><button className="secondary-action" onClick={handleLoadMorePositions} disabled={isRefreshing}>{isRefreshing ? "Reading…" : "Load older positions"}<RefreshCw size={13} /></button></div> : null}
             </div>
           )}
           {txHash && <div className="tx-notice"><span className={`state-dot ${txState === "FINALIZED" ? "cyan" : ""}`} /><span>{txLabel || "Transaction"} · {txState === "PROVISIONAL" ? "accepted provisionally; awaiting protocol finality" : txState === "FINALIZED" ? "finalized" : txState === "FAILED" ? "failed" : "processing"}</span>{txLink ? <a href={txLink} target="_blank" rel="noreferrer">View receipt <ExternalLink size={12} /></a> : <button onClick={() => copyText(txHash)}>{copied ? "Copied" : "Copy hash"} {copied ? <Check size={12} /> : <Copy size={12} />}</button>}</div>}
         </section>
 
         <section className="panel history-panel">
-          <div className="panel-heading compact-heading"><div><h2>Settlement history</h2><p>Public finality records, when available.</p></div><span className="history-filter">ALL MARKETS</span></div>
-          <div className="history-empty"><div className="history-orbit"><Database size={18} /></div><strong>No finalized history read</strong><span>Real settlement records will appear here after a protocol-finalized market is indexed. The current chart is synthetic and is not a trade history.</span></div>
+          <div className="panel-heading compact-heading"><div><h2>Settlement history</h2><p>Paginated on-chain markets and protocol finality.</p></div><span className="history-filter">{historyReadState === "loading" ? "READING…" : `${historyMarkets.length} MARKETS`}</span></div>
+          {historyReadState === "loading" && historyMarkets.length === 0 ? (
+            <div className="history-empty"><div className="history-orbit"><RefreshCw size={18} className="spin" /></div><strong>Reading market history…</strong><span>Fetching bounded pages from the MetalSwap contract.</span></div>
+          ) : historyReadState === "unavailable" && historyMarkets.length === 0 ? (
+            <div className="history-empty"><div className="history-orbit"><AlertTriangle size={18} /></div><strong>History unavailable</strong><span>{historyReadError || "The contract history read failed."}</span><button className="secondary-action" onClick={() => loadHistoryPage(0n, false)}><RefreshCw size={13} />Retry</button></div>
+          ) : historyMarkets.length === 0 ? (
+            <div className="history-empty"><div className="history-orbit"><Database size={18} /></div><strong>No markets indexed yet</strong><span>The operator has not opened a market on this deployment. The chart above is synthetic and is not trade history.</span></div>
+          ) : (
+            <>
+              <div className="history-market-list" aria-label="On-chain market history">
+                {historyMarkets.map((market) => {
+                  const finalized = market.finality_status === "FINALIZED";
+                  return <button
+                    type="button"
+                    className={`history-market-row ${selectedHistoryMarketId === market.market_id ? "selected" : ""}`}
+                    key={market.market_id}
+                    onClick={() => setSelectedHistoryMarketId(market.market_id ?? "")}
+                    aria-pressed={selectedHistoryMarketId === market.market_id}
+                  >
+                    <span><strong>{market.market_id}</strong><small>{formatUtc(dateFrom(market.start_at))} → {formatUtc(dateFrom(market.end_at))}</small></span>
+                    <span className="history-market-outcome">{market.outcome || statusLabel(market.status)}<small>{finalized ? "FINALIZED" : market.finality_status || "PENDING"}</small></span>
+                    <ArrowUpRight size={14} aria-hidden="true" />
+                  </button>;
+                })}
+              </div>
+              {selectedHistoryMarket ? (
+                <div className="history-detail" aria-live="polite">
+                  <div className="history-detail-heading"><div><span className="section-label">SELECTED MARKET</span><strong>{selectedHistoryMarket.market_id}</strong></div><span className={`history-state ${selectedHistoryMarket.finality_status === "FINALIZED" ? "finalized" : ""}`}>{statusLabel(selectedHistoryMarket.status)}</span></div>
+                  <div className="history-detail-grid"><span><small>OUTCOME</small><strong>{selectedHistoryMarket.outcome || "Not settled"}</strong></span><span><small>POOL</small><strong>{formatCredits(selectedHistoryMarket.total_staked)} credits</strong></span><span><small>FINALITY</small><strong>{selectedHistoryMarket.finality_status || "PENDING"}</strong></span></div>
+                  {selectedHistoryMarket.evidence_url ? <a className="history-evidence-link" href={selectedHistoryMarket.evidence_url} target="_blank" rel="noreferrer">Open frozen evidence <ExternalLink size={12} /></a> : null}
+                  {historyDetailLoading ? <div className="history-detail-note"><RefreshCw size={13} className="spin" />Reading this wallet’s position…</div> : walletAddress && selectedHistoryPositionViews.length > 0 ? (
+                    <div className="history-position-list">
+                      {selectedHistoryPositionViews.map((view) => {
+                        const final = view.quote?.finality_status === "FINALIZED";
+                        const claimable = Boolean(final && view.quote?.exists && !view.quote.claimed && view.quote.payout !== undefined);
+                        return <div className="history-position-row" key={`${view.position.market_id}-${view.position.side}`}><span><strong>{view.position.side}</strong><small>{formatCredits(view.position.stake)} credits staked</small></span><span>{view.quote?.claimed ? "CLAIMED" : final ? `${formatCredits(view.quote?.payout)} claimable` : "Awaiting finality"}</span>{claimable ? <button className="text-action" onClick={() => handleClaim(view)} disabled={txBusy}>Claim<ArrowUpRight size={13} /></button> : null}</div>;
+                      })}
+                    </div>
+                  ) : <div className="history-detail-note">{walletAddress ? "This wallet has no position in the selected market." : "Connect a wallet to inspect and claim a historical position."}</div>}
+                </div>
+              ) : null}
+              {historyHasMore ? <div className="history-pagination"><button className="secondary-action" onClick={handleLoadMoreHistory} disabled={historyReadState === "loading"}>{historyReadState === "loading" ? "Reading…" : "Load older markets"}<RefreshCw size={13} /></button></div> : null}
+            </>
+          )}
         </section>
       </section>
 

@@ -68,6 +68,25 @@ export interface ContractPosition {
   entered_at?: string;
 }
 
+export interface ContractPositionPage {
+  positions?: ContractPosition[];
+  total_markets?: ContractNumber;
+  total_positions?: ContractNumber;
+  offset?: ContractNumber;
+  limit?: ContractNumber;
+  next_offset?: ContractNumber;
+  has_more?: boolean;
+}
+
+export interface ContractMarketPage {
+  market_ids?: string[];
+  total?: ContractNumber;
+  offset?: ContractNumber;
+  limit?: ContractNumber;
+  next_offset?: ContractNumber;
+  has_more?: boolean;
+}
+
 export interface ClaimQuote {
   exists?: boolean;
   market_id?: string;

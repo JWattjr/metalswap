@@ -11,6 +11,7 @@ against a disposable source fixture after the market interval has elapsed.
 """
 
 import os
+import time
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -106,3 +107,50 @@ def test_claim_is_rejected_before_market_settlement():
 
     claim_receipt = market.claim_position(args=[current["market_id"], "SILVER"]).transact()
     assert not tx_execution_succeeded(claim_receipt)
+
+
+@pytest.mark.slow
+@pytest.mark.live_demo
+def test_expiry_finality_rotation_and_historical_claim():
+    source = configured_source()
+    gate, market = deploy_wired_pair(source)
+    identifier = open_test_market(market, source)
+    account = get_default_account()
+
+    assert tx_execution_succeeded(market.claim_demo_credits(args=[]).transact())
+    assert tx_execution_succeeded(market.place_position(args=[identifier, "GOLD", 25]).transact())
+    assert tx_execution_succeeded(market.place_position(args=[identifier, "SILVER", 25]).transact())
+
+    detail = market.get_market(args=[identifier]).call()
+    end_at = datetime.fromisoformat(detail["end_at"].replace("Z", "+00:00"))
+    while datetime.now(timezone.utc) < end_at + timedelta(seconds=5):
+        time.sleep(min(30, max(1, int((end_at + timedelta(seconds=5) - datetime.now(timezone.utc)).total_seconds()))))
+
+    settlement_receipt = market.request_settlement(args=[identifier]).transact()
+    assert tx_execution_succeeded(settlement_receipt)
+
+    finality = gate.get_finality(args=[identifier]).call()
+    if not finality.get("finalized"):
+        retry_receipt = market.retry_finality(args=[identifier]).transact()
+        assert tx_execution_succeeded(retry_receipt)
+        for _ in range(12):
+            finality = gate.get_finality(args=[identifier]).call()
+            if finality.get("finalized"):
+                break
+            time.sleep(10)
+    assert finality["finalized"] is True
+
+    outcome = market.get_market(args=[identifier]).call()["outcome"]
+    winning_side = outcome if outcome in ("GOLD", "SILVER") else "GOLD"
+
+    rotated_identifier = open_test_market(market, source)
+    assert rotated_identifier != identifier
+
+    claim_receipt = market.claim_position(args=[identifier, winning_side]).transact()
+    assert tx_execution_succeeded(claim_receipt)
+    historical_position = market.get_position(args=[identifier, account.address, winning_side]).call()
+    assert historical_position["claimed"] is True
+    assert historical_position["payout"] > 0
+
+    duplicate_claim = market.claim_position(args=[identifier, winning_side]).transact()
+    assert not tx_execution_succeeded(duplicate_claim)

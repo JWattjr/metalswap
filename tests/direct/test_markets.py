@@ -163,6 +163,163 @@ def test_missing_evidence_can_refund_after_frozen_deadline(market_contract, dire
     assert market.get_market(identifier)["outcome"] == "REFUND"
 
 
+def test_request_and_refund_after_deadline_share_fee_free_transition(
+    market_contract, direct_vm, direct_owner, direct_alice, direct_bob
+):
+    market = market_contract
+    first = open_market(market, direct_vm)
+    fund_and_stake(market, direct_vm, direct_alice, first, "GOLD", 100)
+    fund_and_stake(market, direct_vm, direct_bob, first, "SILVER", 100)
+    direct_vm.mock_web(
+        rf".*{first}\.json$",
+        {"status": 200, "body": json.dumps(evidence_payload(first))},
+    )
+    direct_vm.warp("2025-01-01T00:40:00Z")
+    direct_vm.sender = direct_alice
+    market.request_settlement(first)
+    first_detail = market.get_market(first)
+
+    direct_vm.warp("2025-01-01T00:45:00Z")
+    direct_vm.sender = direct_owner
+    second = market_id("2025-01-01T01:00:00Z")
+    market.open_market(
+        second,
+        "2025-01-01T01:00:00Z",
+        f"https://metal-swap.vercel.app/evidence/{second}.json",
+    )
+    direct_vm.warp("2025-01-01T01:26:00Z")
+    market.refund_after_deadline(second)
+    second_detail = market.get_market(second)
+
+    for detail in (first_detail, second_detail):
+        assert detail["outcome"] == "REFUND"
+        assert detail["settlement_state"] == "REFUND_PROVISIONAL"
+        assert detail["last_reason_code"] == "SETTLEMENT_DEADLINE_REFUND"
+        assert detail["fee_amount"] == 0
+        assert detail["distributable_pool"] == detail["total_staked"]
+    assert first_detail["settlement_attempts"] == 0
+    assert second_detail["settlement_attempts"] == 0
+
+
+def test_failed_transport_and_truncated_content_remain_pending(
+    market_contract, direct_vm, direct_owner, direct_alice
+):
+    market = market_contract
+    first = open_market(market, direct_vm)
+    fund_and_stake(market, direct_vm, direct_alice, first, "GOLD", 100)
+    direct_vm.mock_web(
+        rf".*{first}\.json$",
+        {"status": 503, "body": json.dumps(evidence_payload(first))},
+    )
+    direct_vm.warp("2025-01-01T00:30:00Z")
+    direct_vm.sender = direct_alice
+    market.request_settlement(first)
+    failed_transport = market.get_market(first)
+    assert failed_transport["settlement_state"] == "PENDING_EVIDENCE"
+    assert failed_transport["last_reason_code"] == "SOURCE_UNAVAILABLE"
+
+    direct_vm.warp("2025-01-01T00:45:00Z")
+    direct_vm.sender = direct_owner
+    second = market_id("2025-01-01T01:00:00Z")
+    market.open_market(
+        second,
+        "2025-01-01T01:00:00Z",
+        f"https://metal-swap.vercel.app/evidence/{second}.json",
+    )
+    direct_vm.mock_web(
+        rf".*{second}\.json$",
+        {"status": 200, "body": b'{"schema_version":"metalswap-evidence-v1"'},
+    )
+    direct_vm.warp("2025-01-01T01:15:00Z")
+    direct_vm.sender = direct_alice
+    market.request_settlement(second)
+    truncated = market.get_market(second)
+    assert truncated["settlement_state"] == "PENDING_EVIDENCE"
+    assert truncated["last_reason_code"] == "MALFORMED_JSON"
+
+
+def test_excessive_evidence_body_and_numeric_value_are_rejected(
+    market_contract, direct_vm, direct_owner, direct_alice
+):
+    market = market_contract
+    first = open_market(market, direct_vm)
+    fund_and_stake(market, direct_vm, direct_alice, first, "GOLD", 100)
+    direct_vm.mock_web(
+        rf".*{first}\.json$",
+        {"status": 200, "body": "x" * 20_000},
+    )
+    direct_vm.warp("2025-01-01T00:30:00Z")
+    direct_vm.sender = direct_alice
+    market.request_settlement(first)
+    assert market.get_market(first)["last_reason_code"] == "EVIDENCE_TOO_LARGE"
+
+    direct_vm.warp("2025-01-01T00:45:00Z")
+    direct_vm.sender = direct_owner
+    second = market_id("2025-01-01T01:00:00Z")
+    market.open_market(
+        second,
+        "2025-01-01T01:00:00Z",
+        f"https://metal-swap.vercel.app/evidence/{second}.json",
+    )
+    payload = evidence_payload(second, gold_opening_price=1_000_000_000_001)
+    direct_vm.mock_web(
+        rf".*{second}\.json$",
+        {"status": 200, "body": json.dumps(payload)},
+    )
+    direct_vm.warp("2025-01-01T01:15:00Z")
+    direct_vm.sender = direct_alice
+    market.request_settlement(second)
+    assert market.get_market(second)["last_reason_code"] == "INVALID_SCHEMA"
+
+
+def test_position_page_boundary_keeps_both_sides_of_one_market(
+    market_contract, direct_vm, direct_alice
+):
+    identifier = open_market(market_contract, direct_vm)
+    direct_vm.sender = direct_alice
+    market_contract.claim_demo_credits()
+    market_contract.place_position(identifier, "GOLD", 100)
+    market_contract.place_position(identifier, "SILVER", 50)
+
+    first = market_contract.get_user_positions(as_address(direct_alice), 0, 1)
+    second = market_contract.get_user_positions(
+        as_address(direct_alice), first["next_offset"], 1
+    )
+
+    assert [position["side"] for position in first["positions"]] == ["GOLD"]
+    assert [position["side"] for position in second["positions"]] == ["SILVER"]
+    assert second["total_positions"] == 2
+    assert second["has_more"] is False
+
+
+def test_historical_position_remains_inspectable_after_market_rotation(
+    market_contract, direct_vm, direct_owner, direct_alice
+):
+    market = market_contract
+    first = open_market(market, direct_vm)
+    fund_and_stake(market, direct_vm, direct_alice, first, "GOLD", 100)
+    fund_and_stake(market, direct_vm, direct_owner, first, "SILVER", 100)
+    settle_with(market, direct_vm, direct_alice, first, evidence_payload(first))
+
+    direct_vm.sender = direct_alice
+
+    direct_vm.warp("2025-01-01T00:45:00Z")
+    direct_vm.sender = direct_owner
+    second = market_id("2025-01-01T01:00:00Z")
+    market.open_market(
+        second,
+        "2025-01-01T01:00:00Z",
+        f"https://metal-swap.vercel.app/evidence/{second}.json",
+    )
+
+    historical = market.get_position(first, as_address(direct_alice), "GOLD")
+    page = market.get_user_positions(as_address(direct_alice), 0, 50)
+    assert historical["exists"] is True
+    assert historical["claimed"] is False
+    assert market.get_claim_quote(first, as_address(direct_alice), "GOLD")["finality_status"] == "PENDING"
+    assert [position["market_id"] for position in page["positions"]] == [first]
+
+
 def test_claim_requires_finality_before_any_claim(
     market_contract, direct_vm, direct_owner, direct_alice
 ):

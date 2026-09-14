@@ -42,6 +42,13 @@ function address(value: string, label: string): string {
   return value.toLowerCase();
 }
 
+function preparedQuarterHour(now = new Date()): string {
+  const quarterMs = 15 * 60 * 1_000;
+  const earliestMs = now.getTime() + 10 * 60 * 1_000;
+  const startMs = Math.ceil(earliestMs / quarterMs) * quarterMs;
+  return new Date(startMs).toISOString().replace(".000Z", "Z");
+}
+
 function receiptStatus(receipt: GenLayerTransaction): string {
   const raw = receipt as unknown as Loose;
   if (typeof raw.statusName === "string") return raw.statusName.toUpperCase();
@@ -135,7 +142,14 @@ export default async function main(client: GenLayerClient<GenLayerChain>) {
   await deployer.write("3/6 Bind gate → market", gateAddress, "configure_market", [address(marketAddress, "MetalSwap address")]);
   await deployer.write("4/6 Bind market → gate", marketAddress, "configure_finality_gate", [address(gateAddress, "SettlementGate address")]);
   await deployer.write("5/6 Freeze evidence source", marketAddress, "configure_source_base_url", [sourceBaseUrl]);
-  const marketOpenHash = await deployer.write("6/6 Open next UTC quarter-hour", marketAddress, "open_next_market", []);
+  const startAt = preparedQuarterHour();
+  const marketId = `market-${startAt}`;
+  const marketOpenHash = await deployer.write(
+    "6/6 Open prepared future UTC quarter-hour",
+    marketAddress,
+    "open_market",
+    [marketId, startAt, `${sourceBaseUrl}${marketId}.json`],
+  );
 
   const market = await client.readContract({ address: marketAddress, functionName: "get_current_market", args: [] });
   const config = await client.readContract({ address: marketAddress, functionName: "get_protocol_config", args: [] });
