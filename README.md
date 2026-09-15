@@ -14,10 +14,10 @@ The current StudioNet deployment freezes XAUS's public XAU/USD and XAG/USD intra
 
 Current XAUS-bound pair on GenLayer StudioNet:
 
-- MetalSwap: `0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6`
-- SettlementGate: `0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131`
-- Open market at deployment readback: `market-2026-09-14T10:15:00Z`
-- Source revision used for the pair: [`3adc8ec0bc2a29173db8fcac9f49cc588e3b0041`](https://github.com/JWattjr/metalswap/commit/3adc8ec0bc2a29173db8fcac9f49cc588e3b0041)
+- MetalSwap: `0xeB7AB5de64139fD9F9F42D451076c62F22865dE7`
+- SettlementGate: `0x49dE8861037C76d4a955091b16020aBF5818f90B`
+- Open market at deployment readback: `market-2026-09-15T23:15:00Z`
+- Source revision used for the pair: [`2da9680c7cd21bdabcd8bf2e8cbfae31d607c175`](https://github.com/JWattjr/metalswap/commit/2da9680c7cd21bdabcd8bf2e8cbfae31d607c175)
 
 ## What is implemented
 

@@ -1,52 +1,70 @@
 {
   "network": "Genlayer Studio Network",
-  "deployedAt": "2026-09-14T10:05:21.621Z",
-  "sourceRevision": "3adc8ec",
-  "sourceRevisionFull": "3adc8ec0bc2a29173db8fcac9f49cc588e3b0041",
+  "deployedAt": "2026-09-15T22:51:26.310Z",
+  "sourceRevision": "2da9680",
   "sourceMode": "XAUS_INDICATIVE_HISTORICAL_REPLAY",
   "sourceBaseUrl": "https://xaus.com/api/v1/intraday",
-  "settlementGateAddress": "0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131",
-  "metalSwapAddress": "0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6",
-  "marketOpenTransaction": "0xd564e5b77182b977486e8ad2fa14644dc85cbb0d0ce166ec9c2491c1f3cafe43",
+  "settlementGateAddress": "0x49dE8861037C76d4a955091b16020aBF5818f90B",
+  "metalSwapAddress": "0xeB7AB5de64139fD9F9F42D451076c62F22865dE7",
+  "marketOpenTransaction": "0xdbb88d58628480ac1e3e19115e8ead49bd01ee267479449eb39bbff31e767940",
+  "sourceRevisionFull": "2da9680c7cd21bdabcd8bf2e8cbfae31d607c175",
   "publicAppUrl": "https://metal-swap.vercel.app",
+  "publicDeploymentId": "dpl_EbSfpRimnwuz8C4PxMU2xNP6yUvJ",
+  "publicDeploymentUrl": "https://metal-swap-p4p0eucr3-wattxs-projects.vercel.app",
+  "publicInspectorUrl": "https://vercel.com/wattxs-projects/metal-swap/EbSfpRimnwuz8C4PxMU2xNP6yUvJ",
   "publicComparisonUrls": [
     "https://metal-swap.vercel.app/comparison/xaus-2026-09-14-09-00-00z",
     "https://metal-swap.vercel.app/comparison/metalswap-synthetic-2026-09-14-07-30-00z"
   ],
+  "liveSourcePreflight": {
+    "checkedAt": "2026-09-15T23:00:30.831Z",
+    "status": "BLOCKED",
+    "observations": [
+      {
+        "url": "https://xaus.com/api/v1/intraday?hours=48&symbol=xau",
+        "httpStatus": 503
+      },
+      {
+        "url": "https://xaus.com/api/v1/intraday?hours=48&symbol=xag",
+        "httpStatus": 503
+      }
+    ],
+    "note": "No live XAUS market was funded or settled while either required source endpoint was unavailable."
+  },
   "deploymentTransactions": [
     {
       "label": "1/6 SettlementGate",
-      "hash": "0x17c7cf6c4cfc3b237a9de433850574cb72386d7f9b81acc074bccbd99131a030",
+      "hash": "0x4aa6ce979ee826124e8f12f387da4c6196df4a583f034cfc13bcbf0d75cd2a83",
       "consensus": "FINALIZED",
       "execution": "SUCCESS"
     },
     {
       "label": "2/6 MetalSwap",
-      "hash": "0x6a84169ecc236d1dfbc0ee1dd0cc9c3f34ed37901562bb9230e66800d2427cd7",
+      "hash": "0xc4945682330f5f11b80570fd29e7eb6a97a1c24d41226547793cdaf66cbeda82",
       "consensus": "FINALIZED",
       "execution": "SUCCESS"
     },
     {
       "label": "3/6 Bind gate → market",
-      "hash": "0x25dbf1d35fcea3b34e69152222d7c1c8da5570b2ab5011e9bcd6825ba51e529c",
+      "hash": "0x746a6fb6985c81d3c704f41cf3cf4819fc5956f3ef8b3dfbce1892145eb49ada",
       "consensus": "FINALIZED",
       "execution": "SUCCESS"
     },
     {
       "label": "4/6 Bind market → gate",
-      "hash": "0x9ced6e0d1fe88a278076cc838704c24992ea55601dd1a18951a83c6ff9c68a21",
+      "hash": "0x1a14641faa05deb9f60edf040e9f7f5f6ff30d328c6f409de015f97d6bfa0cd5",
       "consensus": "FINALIZED",
       "execution": "SUCCESS"
     },
     {
       "label": "5/6 Freeze evidence source",
-      "hash": "0xddba10e5420a5eaf1162d838eea945653fcada965e3e0af70ec4a98c605cf8f6",
+      "hash": "0x74ee87a2a9fed32b92dec68ebf81ab30bb2639be0406dd464a22f032eb5067f0",
       "consensus": "FINALIZED",
       "execution": "SUCCESS"
     },
     {
       "label": "6/6 Open prepared future UTC quarter-hour",
-      "hash": "0xd564e5b77182b977486e8ad2fa14644dc85cbb0d0ce166ec9c2491c1f3cafe43",
+      "hash": "0xdbb88d58628480ac1e3e19115e8ead49bd01ee267479449eb39bbff31e767940",
       "consensus": "FINALIZED",
       "execution": "SUCCESS"
     }
@@ -54,9 +72,9 @@
   "readback": {
     "market": {
       "claimed_amount": 0,
-      "created_at": "2026-09-14T10:04:39Z",
+      "created_at": "2026-09-15T22:50:43Z",
       "distributable_pool": 0,
-      "end_at": "2026-09-14T10:30:00Z",
+      "end_at": "2026-09-15T23:30:00Z",
       "evidence_hash": "",
       "evidence_url": "https://xaus.com/api/v1/intraday?hours=48",
       "exists": true,
@@ -70,12 +88,12 @@
       "gold_opening_timestamp": "",
       "gold_pool": 0,
       "last_reason_code": "",
-      "market_id": "market-2026-09-14T10:15:00Z",
+      "market_id": "market-2026-09-15T23:15:00Z",
       "outcome": "",
       "price_scale": 1000000,
       "rule_version": "relative-return-cross-multiplication-v1",
       "settlement_attempts": 0,
-      "settlement_deadline": "2026-09-14T10:40:00Z",
+      "settlement_deadline": "2026-09-15T23:40:00Z",
       "settlement_state": "AWAITING_SETTLEMENT",
       "silver_closing_price": 0,
       "silver_closing_timestamp": "",
@@ -83,7 +101,7 @@
       "silver_opening_timestamp": "",
       "silver_pool": 0,
       "source_id": "xaus-intraday-indicative-v1",
-      "start_at": "2026-09-14T10:15:00Z",
+      "start_at": "2026-09-15T23:15:00Z",
       "status": "UPCOMING",
       "total_staked": 0
     },
@@ -99,7 +117,7 @@
       "max_market_horizon_seconds": 1800,
       "max_settlement_attempts": 3,
       "max_skew_seconds": 60,
-      "owner": "0xdB433ff614bDD1ecE21Aa97221C3E0a7ecf79c92",
+      "owner": "0x2C8EB5dB1105A85BE66BadafeD88D10cF393CDD8",
       "price_scale": 1000000,
       "refund_policy": "equal relative returns, one-sided pools, or deadline expiry refund stakes without fees",
       "rounding_policy": "floor each proportional payout; dust remains undistributed",
@@ -119,7 +137,7 @@
     "gate": {
       "finalized_markets": 0,
       "market_configured": true,
-      "market_contract": "0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6"
+      "market_contract": "0xeB7AB5de64139fD9F9F42D451076c62F22865dE7"
     }
   },
   "previousSyntheticDeployment": {

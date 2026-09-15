@@ -2,7 +2,7 @@
 
 The production deployment is deliberately not driven through Portal by this repository. Use the configured GenLayer account and the observed addresses in `deploy/last-deployment.json` when a live end-to-end pass is needed.
 
-The corrected live application bindings are MetalSwap `0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6` and SettlementGate `0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131`. The deployment-time market is historical and empty; it is not a completed XAUS settlement. The preserved completed synthetic proof is linked from `deploy/DEPLOYMENT.md`.
+The corrected live application bindings are MetalSwap `0xeB7AB5de64139fD9F9F42D451076c62F22865dE7` and SettlementGate `0x49dE8861037C76d4a955091b16020aBF5818f90B`. The deployment-time market is empty and source-bound; it is not a completed XAUS settlement. The preserved completed synthetic proof is linked from `deploy/DEPLOYMENT.md`.
 
 The direct suite proves the deterministic paths locally. `test_metalswap_flow.py` deploys a fresh wired gate/market pair and checks the live write/read boundary; this runbook covers the longer settlement and claim lifecycle that requires a real GenLayer message lifecycle:
 
@@ -27,9 +27,9 @@ Useful read-only commands:
 
 ```powershell
 genlayer network set studionet
-genlayer call 0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6 get_current_market
-genlayer call 0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6 get_protocol_config
-genlayer call 0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131 get_gate_status
+genlayer call 0xeB7AB5de64139fD9F9F42D451076c62F22865dE7 get_current_market
+genlayer call 0xeB7AB5de64139fD9F9F42D451076c62F22865dE7 get_protocol_config
+genlayer call 0x49dE8861037C76d4a955091b16020aBF5818f90B get_gate_status
 ```
 
 Do not record a market as claimable from an `ACCEPTED` receipt alone. The UI and contract both treat the `SettlementGate` record as the claim boundary.

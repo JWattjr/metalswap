@@ -1,19 +1,19 @@
 # Observed deployment and proof package
 
-Captured from authorized GenLayer StudioNet test accounts on 2026-09-14. The current XAUS-bound pair was deployed from source revision [`3adc8ec0bc2a29173db8fcac9f49cc588e3b0041`](https://github.com/JWattjr/metalswap/commit/3adc8ec0bc2a29173db8fcac9f49cc588e3b0041). The earlier synthetic pair and its completed payout remain preserved below.
+Captured from authorized GenLayer StudioNet test accounts on 2026-09-15. The current XAUS-bound pair was deployed from source revision [`2da9680c7cd21bdabcd8bf2e8cbfae31d607c175`](https://github.com/JWattjr/metalswap/commit/2da9680c7cd21bdabcd8bf2e8cbfae31d607c175). The earlier synthetic pair and its completed payout remain preserved below.
 
 ## Public package
 
 - App: [metal-swap.vercel.app](https://metal-swap.vercel.app)
 - Repository: [github.com/JWattjr/metalswap](https://github.com/JWattjr/metalswap)
-- Current production build: [Vercel deployment `dpl_BJ6HrQc9cyH4iZwSoLgjCy2Y89E3`](https://vercel.com/wattxs-projects/metal-swap/BJ6HrQc9cyH4iZwSoLgjCy2Y89E3)
+- Current production build: [Vercel deployment `dpl_EbSfpRimnwuz8C4PxMU2xNP6yUvJ`](https://vercel.com/wattxs-projects/metal-swap/EbSfpRimnwuz8C4PxMU2xNP6yUvJ)
 - Network: GenLayer Studio Network (`studionet`), chain ID `61999`
 - RPC: `https://studio.genlayer.com/api`
 - Public XAUS comparison: [xaus-2026-09-14-09-00-00z](https://metal-swap.vercel.app/comparison/xaus-2026-09-14-09-00-00z)
 - Preserved synthetic mechanics proof: [metalswap-synthetic-2026-09-14-07-30-00z](https://metal-swap.vercel.app/comparison/metalswap-synthetic-2026-09-14-07-30-00z)
-- Current MetalSwap: `0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6`
-- Current SettlementGate: `0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131`
-- Owner observed in config: `0xdB433ff614bDD1ecE21Aa97221C3E0a7ecf79c92`
+- Current MetalSwap: `0xeB7AB5de64139fD9F9F42D451076c62F22865dE7`
+- Current SettlementGate: `0x49dE8861037C76d4a955091b16020aBF5818f90B`
+- Owner observed in config: `0x2C8EB5dB1105A85BE66BadafeD88D10cF393CDD8`
 
 The current pair freezes `https://xaus.com/api/v1/intraday?hours=48` as source identity `xaus-intraday-indicative-v1`, with `XAUUSD` and `XAGUSD` in USD per troy ounce. XAUS's own terms describe the series as indicative mid-market values, not settlement-grade, executable, or contractual prices. The source is used here for a named historical replay/comparison, not fair live trading.
 
@@ -23,14 +23,16 @@ The deployment script checked protocol consensus `FINALIZED` and execution `SUCC
 
 | Step | Receipt |
 | --- | --- |
-| Deploy SettlementGate | [0x17c7cf…1a030](https://genlayer-explorer.vercel.app/tx/0x17c7cf6c4cfc3b237a9de433850574cb72386d7f9b81acc074bccbd99131a030) · `FINALIZED / SUCCESS` |
-| Deploy MetalSwap | [0x6a8416…27cd7](https://genlayer-explorer.vercel.app/tx/0x6a84169ecc236d1dfbc0ee1dd0cc9c3f34ed37901562bb9230e66800d2427cd7) · `FINALIZED / SUCCESS` |
-| Bind gate → market | [0x25dbf1…529c](https://genlayer-explorer.vercel.app/tx/0x25dbf1d35fcea3b34e69152222d7c1c8da5570b2ab5011e9bcd6825ba51e529c) · `FINALIZED / SUCCESS` |
-| Bind market → gate | [0x9ced6e…a21](https://genlayer-explorer.vercel.app/tx/0x9ced6e0d1fe88a278076cc838704c24992ea55601dd1a18951a83c6ff9c68a21) · `FINALIZED / SUCCESS` |
-| Freeze XAUS source | [0xddba10…cf8f6](https://genlayer-explorer.vercel.app/tx/0xddba10e5420a5eaf1162d838eea945653fcada965e3e0af70ec4a98c605cf8f6) · `FINALIZED / SUCCESS` |
-| Open `market-2026-09-14T10:15:00Z` | [0xd564e5…afe43](https://genlayer-explorer.vercel.app/tx/0xd564e5b77182b977486e8ad2fa14644dc85cbb0d0ce166ec9c2491c1f3cafe43) · `FINALIZED / SUCCESS` |
+| Deploy SettlementGate | [0x4aa6ce…2a83](https://genlayer-explorer.vercel.app/tx/0x4aa6ce979ee826124e8f12f387da4c6196df4a583f034cfc13bcbf0d75cd2a83) · `FINALIZED / SUCCESS` |
+| Deploy MetalSwap | [0xc49456…eda82](https://genlayer-explorer.vercel.app/tx/0xc4945682330f5f11b80570fd29e7eb6a97a1c24d41226547793cdaf66cbeda82) · `FINALIZED / SUCCESS` |
+| Bind gate → market | [0x746a6f…9ada](https://genlayer-explorer.vercel.app/tx/0x746a6fb6985c81d3c704f41cf3cf4819fc5956f3ef8b3dfbce1892145eb49ada) · `FINALIZED / SUCCESS` |
+| Bind market → gate | [0x1a1464…a0cd5](https://genlayer-explorer.vercel.app/tx/0x1a14641faa05deb9f60edf040e9f7f5f6ff30d328c6f409de015f97d6bfa0cd5) · `FINALIZED / SUCCESS` |
+| Freeze XAUS source | [0x74ee87…067f0](https://genlayer-explorer.vercel.app/tx/0x74ee87a2a9fed32b92dec68ebf81ab30bb2639be0406dd464a22f032eb5067f0) · `FINALIZED / SUCCESS` |
+| Open `market-2026-09-15T23:15:00Z` | [0xdbb88d…7940](https://genlayer-explorer.vercel.app/tx/0xdbb88d58628480ac1e3e19115e8ead49bd01ee267479449eb39bbff31e767940) · `FINALIZED / SUCCESS` |
 
-Deployment-time readback: start `2026-09-14T10:15:00Z`, end `10:30:00Z`, settlement deadline `10:40:00Z`, source mode `XAUS_INDICATIVE_HISTORICAL_REPLAY`, source history `48h`, price scale `1_000_000`, maximum gap `180s`, maximum cross-metal skew `60s`, and `finalized_markets=0`. The prepared market had zero stake, zero evidence, and `AWAITING_SETTLEMENT` at that readback. No XAUS-backed wager or settlement is claimed.
+Deployment-time readback: start `2026-09-15T23:15:00Z`, end `23:30:00Z`, settlement deadline `23:40:00Z`, source mode `XAUS_INDICATIVE_HISTORICAL_REPLAY`, source history `48h`, price scale `1_000_000`, maximum gap `180s`, maximum cross-metal skew `60s`, and `finalized_markets=0`. The prepared market had zero stake, zero evidence, and `AWAITING_SETTLEMENT` at that readback. No XAUS-backed wager or settlement is claimed.
+
+Live-source preflight on `2026-09-15T23:00:30.831Z` returned HTTP `503` for both required URLs (`xau` and `xag`). The prepared market was therefore not funded, and no settlement, finality, payout, or duplicate-claim receipt is claimed for this XAUS pair.
 
 ## Public XAUS comparison case
 
@@ -78,11 +80,11 @@ Case: [market-2026-09-14T07:30:00Z evidence](https://metal-swap.vercel.app/evide
 
 ## Test and readiness status
 
-- Direct focused regression suite: `26 passed`.
+- Direct focused regression suite: `27 passed`.
 - Contract lint, validation, typecheck, and schema checks: passed.
 - Frontend typecheck, production build, and Playwright browser suite: passed (`6 passed`).
 - Live synthetic behavior: expiry, settlement, finality gate, 49-credit payout, duplicate rejection, rotation, and old-position readback observed on StudioNet.
-- Fresh XAUS deployment: binding/source/readback receipts observed as `FINALIZED / SUCCESS`; no XAUS-backed market was funded or settled.
+- Fresh full-window XAUS deployment from `2da9680c7cd21bdabcd8bf2e8cbfae31d607c175`: binding/source/readback receipts observed as `FINALIZED / SUCCESS`; the prepared market was not funded or settled because both validator source URLs returned HTTP 503 during the live preflight. No XAUS-backed payout is claimed.
 
 Synthetic outcomes are public, developer-generated, deterministic, and predictable; delayed publication does not make them unpredictable. Demo credits are not USDC or real funds. This package is a controlled mechanics demonstration and an independently sourced historical comparison, not fair trading, executable pricing, official benchmark settlement, or a real-price trading product.
 

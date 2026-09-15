@@ -163,7 +163,9 @@ export default async function main(client: GenLayerClient<GenLayerChain>) {
   let previousSyntheticDeployment: Loose | undefined;
   try {
     const previous = JSON.parse(readFileSync(outputPath, "utf-8")) as Loose;
-    if (previous?.demo) {
+    if (previous?.previousSyntheticDeployment) {
+      previousSyntheticDeployment = previous.previousSyntheticDeployment;
+    } else if (previous?.demo) {
       previousSyntheticDeployment = {
         network: previous.network,
         deployedAt: previous.deployedAt,
@@ -180,6 +182,9 @@ export default async function main(client: GenLayerClient<GenLayerChain>) {
     network,
     deployedAt: new Date().toISOString(),
     sourceRevision: env("METALSWAP_SOURCE_REVISION", "unknown"),
+    ...(env("METALSWAP_SOURCE_REVISION_FULL")
+      ? { sourceRevisionFull: env("METALSWAP_SOURCE_REVISION_FULL") }
+      : {}),
     sourceMode: isXausSource ? "XAUS_INDICATIVE_HISTORICAL_REPLAY" : "SYNTHETIC_DEMO",
     sourceBaseUrl,
     settlementGateAddress: gateAddress,
