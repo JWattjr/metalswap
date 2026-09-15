@@ -1,7 +1,7 @@
 """Focused tests for the public XAUS paired-observation source mode."""
 
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -31,6 +31,21 @@ def series(symbol: str, points: list[dict], *, response_symbol: str | None = Non
         "coverage_seconds": 4_000,
         "data_state": {"status": state, "source": "sampler", "as_of": "2025-01-01T00:30:00Z", "age_seconds": 0},
     }
+
+
+def full_series(symbol: str, base_price_fixed: int, step_fixed: int, *, tail_shift: int = 0):
+    """Build a complete 48-hour, two-minute XAUS-sized response."""
+    start = datetime(2024, 12, 31, 12, 30, 2, tzinfo=timezone.utc)
+    points = []
+    for index in range(1_440):
+        timestamp = int((start + timedelta(seconds=index * 120)).timestamp())
+        price_fixed = base_price_fixed + (index * step_fixed)
+        if index >= 1_400:
+            price_fixed += tail_shift
+        points.append({"t": timestamp, "p": f"{price_fixed / 1_000_000:.6f}"})
+    payload = series(symbol, points)
+    payload["coverage_seconds"] = 172_680
+    return payload
 
 
 def open_xaus_market(contract, direct_vm, start="2025-01-01T00:15:00Z"):
@@ -210,3 +225,46 @@ def test_xaus_wrong_instrument_or_unit_is_rejected(
     direct_vm.sender = direct_alice
     xaus_market_contract.request_settlement(identifier)
     assert xaus_market_contract.get_market(identifier)["last_reason_code"] == "INVALID_SCHEMA"
+
+
+def test_xaus_run_nondet_validator_converges_on_full_series_with_moving_tail(
+    xaus_market_contract, direct_vm, direct_owner, direct_alice, direct_bob
+):
+    """Exercise the actual captured leader/validator harness, not only leader logic."""
+    assert direct_alice != direct_owner
+    identifier = open_xaus_market(xaus_market_contract, direct_vm)
+    fund_and_stake(xaus_market_contract, direct_vm, direct_alice, identifier, "GOLD", 100)
+    fund_and_stake(xaus_market_contract, direct_vm, direct_bob, identifier, "SILVER", 100)
+
+    leader_gold = full_series("xau", 2_000_000_000, 10_000, tail_shift=0)
+    leader_silver = full_series("xag", 25_000_000, 100, tail_shift=0)
+    assert 16_384 < len(json.dumps(leader_gold).encode("utf-8")) <= 64 * 1_024
+    direct_vm.mock_web(
+        r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xau$",
+        {"status": 200, "body": json.dumps(leader_gold)},
+    )
+    direct_vm.mock_web(
+        r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xag$",
+        {"status": 200, "body": json.dumps(leader_silver)},
+    )
+    direct_vm.warp("2025-01-01T00:30:00Z")
+    direct_vm.sender = direct_alice
+    xaus_market_contract.request_settlement(identifier)
+
+    # The validator sees a different moving-feed tail, but the four selected
+    # points at/before the frozen boundaries are identical.
+    direct_vm.clear_mocks()
+    direct_vm.mock_web(
+        r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xau$",
+        {"status": 200, "body": json.dumps(full_series("xau", 2_000_000_000, 10_000, tail_shift=777))},
+    )
+    direct_vm.mock_web(
+        r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xag$",
+        {"status": 200, "body": json.dumps(full_series("xag", 25_000_000, 100, tail_shift=333))},
+    )
+
+    assert direct_vm.run_validator() is True
+    detail = xaus_market_contract.get_market(identifier)
+    assert detail["outcome"] == "GOLD"
+    assert detail["gold_opening_timestamp"] == "2025-01-01T00:14:02Z"
+    assert detail["gold_closing_timestamp"] == "2025-01-01T00:28:02Z"

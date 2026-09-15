@@ -67,7 +67,10 @@ MAX_SETTLEMENT_ATTEMPTS = 3
 MAX_GAP_SECONDS = 180
 MAX_SKEW_SECONDS = 60
 MAX_PRICE = 10**12
-MAX_EVIDENCE_BODY_BYTES = 16_384
+# XAUS publishes a 48-hour window at two-minute intervals (up to 1,500
+# points). Keep the body bounded while leaving room for the complete window,
+# metadata, and normal JSON whitespace.
+MAX_EVIDENCE_BODY_BYTES = 64 * 1_024
 MAX_EVIDENCE_STRING_LENGTH = 2_048
 MAX_XAUS_POINTS = 1_500
 XAUS_INTERVAL_SECONDS = 120

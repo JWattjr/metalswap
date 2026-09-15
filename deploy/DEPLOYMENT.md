@@ -70,7 +70,7 @@ Case: [market-2026-09-14T07:30:00Z evidence](https://metal-swap.vercel.app/evide
 ## What validators actually verify
 
 - The owner-only frozen source and exact market evidence URL.
-- Successful 2xx transport, non-empty UTF-8 body no larger than 16 KiB, valid JSON, bounded point count, exact symbols/currency/unit/hours/interval, fresh sampler state, ordered timestamps, positive six-decimal prices, and bounded coverage.
+- Successful 2xx transport, non-empty UTF-8 body no larger than 64 KiB, valid JSON, at most 1,500 points, exact symbols/currency/unit/hours/interval, fresh sampler state, ordered timestamps, positive six-decimal prices, and bounded coverage. The larger bound admits the complete 48-hour, two-minute XAUS window while remaining explicitly bounded.
 - Latest-at-or-before boundary selection, maximum `180s` boundary gap, maximum `60s` cross-metal timestamp skew, recomputed gap/skew fields, and canonical SHA-256 payload matching.
 - Independent `xau` and `xag` reads by leader and validator; disagreement, missing data, malformed data, or source failure remains pending.
 - Snapshot ordinary values before consensus closures; no `self` or storage-backed Market object is captured.

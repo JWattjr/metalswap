@@ -21,12 +21,21 @@ from gltest.accounts import get_default_account
 from gltest.assertions import tx_execution_succeeded
 
 
+XAUS_SOURCE_BASE_URL = "https://xaus.com/api/v1/intraday"
+XAUS_EVIDENCE_URL = "https://xaus.com/api/v1/intraday?hours=48"
+
+
 def configured_source() -> str:
     source = os.getenv("METALSWAP_INTEGRATION_SOURCE_BASE_URL", "").strip()
     if not source:
         pytest.skip("Set METALSWAP_INTEGRATION_SOURCE_BASE_URL to run live integration coverage.")
+    if source == XAUS_SOURCE_BASE_URL:
+        return source
     if not source.startswith("https://") or not source.endswith("/"):
-        pytest.fail("METALSWAP_INTEGRATION_SOURCE_BASE_URL must be an HTTPS directory with a trailing slash.")
+        pytest.fail(
+            "METALSWAP_INTEGRATION_SOURCE_BASE_URL must be the exact XAUS endpoint "
+            "or an HTTPS directory with a trailing slash."
+        )
     return source
 
 
@@ -52,8 +61,9 @@ def open_test_market(market, source: str) -> str:
         start += timedelta(minutes=15)
     start_at = start.strftime("%Y-%m-%dT%H:%M:%SZ")
     identifier = f"market-{start_at}"
+    evidence_url = XAUS_EVIDENCE_URL if source == XAUS_SOURCE_BASE_URL else f"{source}{identifier}.json"
     receipt = market.open_market(
-        args=[identifier, start_at, f"{source}{identifier}.json"]
+        args=[identifier, start_at, evidence_url]
     ).transact()
     assert tx_execution_succeeded(receipt)
     return identifier
@@ -72,6 +82,10 @@ def test_two_contract_wiring_and_position_submission():
     assert current["market_id"] == identifier
     assert current["evidence_url"].startswith(source)
     assert config["source_base_configured"] is True
+    if source == XAUS_SOURCE_BASE_URL:
+        assert config["source_mode"] == "XAUS_INDICATIVE_HISTORICAL_REPLAY"
+        assert config["gold_instrument"] == "XAUUSD"
+        assert config["silver_instrument"] == "XAGUSD"
     assert config["finality_gate_configured"] is True
     assert gate_status["market_configured"] is True
     assert gate_status["market_contract"].lower() == market.address.lower()
@@ -129,6 +143,14 @@ def test_expiry_finality_rotation_and_historical_claim():
     settlement_receipt = market.request_settlement(args=[identifier]).transact()
     assert tx_execution_succeeded(settlement_receipt)
 
+    settled = market.get_market(args=[identifier]).call()
+    assert settled["outcome"] in ("GOLD", "SILVER", "REFUND")
+    assert settled["evidence_hash"].startswith("sha256:")
+    attempts = settled["settlement_attempts"]
+    repeat_receipt = market.request_settlement(args=[identifier]).transact()
+    assert tx_execution_succeeded(repeat_receipt)
+    assert market.get_market(args=[identifier]).call()["settlement_attempts"] == attempts
+
     finality = gate.get_finality(args=[identifier]).call()
     if not finality.get("finalized"):
         retry_receipt = market.retry_finality(args=[identifier]).transact()
@@ -139,6 +161,7 @@ def test_expiry_finality_rotation_and_historical_claim():
                 break
             time.sleep(10)
     assert finality["finalized"] is True
+    assert market.get_market(args=[identifier]).call()["finality_status"] == "FINALIZED"
 
     outcome = market.get_market(args=[identifier]).call()["outcome"]
     winning_side = outcome if outcome in ("GOLD", "SILVER") else "GOLD"

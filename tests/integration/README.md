@@ -2,29 +2,34 @@
 
 The production deployment is deliberately not driven through Portal by this repository. Use the configured GenLayer account and the observed addresses in `deploy/last-deployment.json` when a live end-to-end pass is needed.
 
+The corrected live application bindings are MetalSwap `0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6` and SettlementGate `0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131`. The deployment-time market is historical and empty; it is not a completed XAUS settlement. The preserved completed synthetic proof is linked from `deploy/DEPLOYMENT.md`.
+
 The direct suite proves the deterministic paths locally. `test_metalswap_flow.py` deploys a fresh wired gate/market pair and checks the live write/read boundary; this runbook covers the longer settlement and claim lifecycle that requires a real GenLayer message lifecycle:
 
-1. Read `get_current_market` and confirm `status=UPCOMING`, the source URL is `https://metal-swap.vercel.app/evidence/`, and the market interval is a future UTC quarter-hour.
-2. Have two testnet accounts call `claim_demo_credits`, then place one GOLD and one SILVER position before `start_at`.
-3. After `end_at`, call `request_settlement`. Wait for the parent transaction to be `FINALIZED`, then read `SettlementGate.get_finality(market_id)`. The gate record must be present before any claim is attempted.
-4. Read `get_market` and confirm the outcome, `fee_amount`, `distributable_pool`, four stored prices, and `finality_status` match the gate record. A second `request_settlement(market_id)` must leave `settlement_attempts` unchanged.
-5. From the winning account, call `claim_position(market_id, side)` and wait for its finalized receipt. Read `get_position` and `get_account`; the position must be marked `claimed` and the payout must be credited once. Repeating the same `claim_position` call must fail with `[EXPECTED] position already claimed`.
-6. To exercise the late path, use a fresh market whose evidence response is unavailable or invalid. Call settlement until it remains `PENDING_EVIDENCE`, then after `settlement_deadline` call `refund_after_deadline`. The market must become `REFUND`, `fee_amount` must remain zero, and each position must quote its original stake.
+1. Preflight both XAUS URLs and require HTTP 2xx before opening/funding a real-source market. The exact source is `https://xaus.com/api/v1/intraday?hours=48`; validators append `&symbol=xau` and `&symbol=xag`. If either returns 503, stop and record the source outage; do not call the archived comparison proof a live settlement.
+2. The owner calls `open_next_market` (or `open_market`) for a future UTC quarter-hour. `open_next_market` is owner-only; `request_settlement` is permissionless after expiry. Read `get_current_market` and confirm `status=UPCOMING`, the XAUS source URL, and the interval.
+3. Have two testnet accounts call `claim_demo_credits`, then place one GOLD and one SILVER position before `start_at`.
+4. After `end_at`, a non-owner may call `request_settlement`. Wait for the parent transaction to be `FINALIZED` and execution `SUCCESS`, then read `SettlementGate.get_finality(market_id)`. The gate record must be present before any claim is attempted.
+5. Read `get_market` and confirm a non-empty evidence hash, four stored prices/timestamps, outcome, `fee_amount`, `distributable_pool`, and `finality_status` match the gate record. A second `request_settlement(market_id)` must leave `settlement_attempts` unchanged.
+6. From the winning account, call `claim_position(market_id, side)` and wait for its finalized receipt. Read `get_position` and `get_account`; the position must be marked `claimed` and the payout must be credited once. Repeating the same `claim_position` call must fail with `[EXPECTED] position already claimed`.
+7. To exercise the late path, use a fresh market whose evidence response is unavailable or invalid. Call settlement until it remains `PENDING_EVIDENCE`, then after `settlement_deadline` call `refund_after_deadline`. The market must become `REFUND`, `fee_amount` must remain zero, and each position must quote its original stake.
 
 Run the automated wiring smoke test with:
 
 ```powershell
-$env:METALSWAP_INTEGRATION_SOURCE_BASE_URL = "https://<host>/evidence/"
+$env:METALSWAP_INTEGRATION_SOURCE_BASE_URL = "https://xaus.com/api/v1/intraday"
 gltest tests/integration/test_metalswap_flow.py -v -s
 ```
+
+Use an HTTPS directory such as `https://<host>/evidence/` only for disposable synthetic integration fixtures. It does not prove independent XAUS retrieval. The `live_demo` test with the exact XAUS source is the real-source path and should not be reported as complete unless both validator reads agree and the gate, payout, duplicate rejection, and post-rotation historical read are observed.
 
 Useful read-only commands:
 
 ```powershell
 genlayer network set studionet
-genlayer call 0xB615a841A33e79CC9EDB67D7dcf7C42eEeE0ce7E get_current_market
-genlayer call 0xB615a841A33e79CC9EDB67D7dcf7C42eEeE0ce7E get_protocol_config
-genlayer call 0x88862E86176887CE7fc611EEe3105b00eCcaac17 get_gate_status
+genlayer call 0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6 get_current_market
+genlayer call 0xFffDA717B60c1EdeB786592f80Dc73b731738Ef6 get_protocol_config
+genlayer call 0x57fFc7AC20db57e0aBeBdBDCd8a6157Da6982131 get_gate_status
 ```
 
 Do not record a market as claimable from an `ACCEPTED` receipt alone. The UI and contract both treat the `SettlementGate` record as the claim boundary.
