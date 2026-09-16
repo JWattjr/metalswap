@@ -8,11 +8,11 @@
   "publicDeployment": {
     "productionUrl": "https://metal-swap.vercel.app",
     "proofUrl": "https://metal-swap.vercel.app/comparison/xaus-live-2026-09-16-12-15-00z",
-    "deploymentUrl": "https://metal-swap-8u4t3b4sv-wattxs-projects.vercel.app",
-    "deploymentId": "dpl_7Wq3FRUYZzqDQfYpwJxjLiy7dEbo",
-    "inspectorUrl": "https://vercel.com/wattxs-projects/metal-swap/7Wq3FRUYZzqDQfYpwJxjLiy7dEbo",
+    "deploymentUrl": "https://metal-swap-nkdkqsbpm-wattxs-projects.vercel.app",
+    "deploymentId": "dpl_3ZSmb9Cwb15F1KSS5wjpE66yGW7p",
+    "inspectorUrl": "https://vercel.com/wattxs-projects/metal-swap/3ZSmb9Cwb15F1KSS5wjpE66yGW7p",
     "readyState": "READY",
-    "releasePackageRevision": "b4e5d7bc8bf7ebba781052c507a50eb5c1ff1270",
+    "releasePackageRevision": "1f9f28bd83f2aea1752ccec5673153f836168b87",
     "verifiedHttpStatus": 200
   },
   "settlementGateAddress": "0x5b00b98fa2a530E1b0E676b96A2FEC74012AFb20",
