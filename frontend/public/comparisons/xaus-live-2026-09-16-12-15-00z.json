@@ -1,0 +1,67 @@
+{
+  "case_id": "xaus-live-2026-09-16-12-15-00z",
+  "mode": "LIVE_INTERVAL",
+  "market_id": "market-2026-09-16T12:15:00Z",
+  "interval": {
+    "start_at": "2026-09-16T12:15:00Z",
+    "end_at": "2026-09-16T12:30:00Z",
+    "settlement_deadline": "2026-09-16T12:40:00Z"
+  },
+  "source": {
+    "id": "xaus-intraday-indicative-v1",
+    "name": "XAUS public intraday sampler",
+    "terms_url": "https://xaus.com/api/",
+    "gold_url": "https://xaus.com/api/v1/intraday?hours=48&symbol=xau",
+    "silver_url": "https://xaus.com/api/v1/intraday?hours=48&symbol=xag",
+    "captured_at": "2026-09-16T12:30:49.233228Z",
+    "source_state": "fresh",
+    "source_state_origin": "sampler"
+  },
+  "observations": {
+    "gold": {
+      "instrument": "XAUUSD",
+      "currency": "USD",
+      "unit": "USD_PER_TROY_OUNCE",
+      "opening": { "timestamp": "2026-09-16T12:14:01Z", "price_fixed": 4345100098 },
+      "closing": { "timestamp": "2026-09-16T12:28:02Z", "price_fixed": 4341299805 }
+    },
+    "silver": {
+      "instrument": "XAGUSD",
+      "currency": "USD",
+      "unit": "USD_PER_TROY_OUNCE",
+      "opening": { "timestamp": "2026-09-16T12:14:01Z", "price_fixed": 64767998 },
+      "closing": { "timestamp": "2026-09-16T12:28:02Z", "price_fixed": 64733002 }
+    }
+  },
+  "alignment": {
+    "selection_rule": "latest_observation_at_or_before_boundary",
+    "max_boundary_staleness_seconds": 180,
+    "actual_max_boundary_staleness_seconds": 118,
+    "max_cross_metal_timestamp_skew_seconds": 60,
+    "actual_max_cross_metal_timestamp_skew_seconds": 0,
+    "fixed_point_scale": 1000000
+  },
+  "evidence_hash": "sha256:bd579dfd253e080eaef8dde52772922dff07c190a4b991a122710d4464a77ed0",
+  "settlement": {
+    "market_contract": "0x3D5ccf7e160031EC049c52815283269b95D8DbD7",
+    "settlement_gate": "0x5b00b98fa2a530E1b0E676b96A2FEC74012AFb20",
+    "source_revision": "f21a67be03e7d40dd68cff63a38de1f31d3ad2e1",
+    "outcome": "SILVER",
+    "pool": 50,
+    "fee": 1,
+    "distributable_pool": 49,
+    "payout_side": "SILVER",
+    "payout": 49,
+    "gate_finalized": true,
+    "gate_finalized_at": "2026-09-16T12:31:25.462287Z",
+    "settlement_receipt": "0x21e46aa26516af78addda3b4209f41cc74fb8e18a8c933fd7779a105a24380a0",
+    "gate_receipt": "0xe04a66361130a55b836a4cb729a1ce32397790ea7bce72c9db0ce40c42e636f4",
+    "payout_receipt": "0x7dcbbab916742de34b334442ea799188cf65fc7a51734e0a0ad93079fb4bc721",
+    "duplicate_claim_receipt": "0xa1a47df856dfe64340826cbf56be0f166bb80a247fc5b9d6f8dc037ce39baca2",
+    "duplicate_claim_error": "[EXPECTED] position already claimed",
+    "rotation_receipt": "0x1d4f0f4ebbe5500ac925f8a21296411fa7f37ffdc96fe0fa32604680651d8840",
+    "post_rotation_market_id": "market-2026-09-16T12:45:00Z",
+    "historical_position_readable": true
+  },
+  "note": "This completed StudioNet market used externally published XAUS observations during a live 15-minute interval and demo credits. XAUS labels the values indicative and non-executable, so this demonstrates mechanics and validator agreement—not benchmark-grade pricing or fair real-money trading."
+}

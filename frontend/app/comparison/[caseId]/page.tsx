@@ -2,11 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import realCase from "@/public/comparisons/xaus-2026-09-14-09-00-00z.json";
+import liveCase from "@/public/comparisons/xaus-live-2026-09-16-12-15-00z.json";
 import syntheticCase from "@/public/comparisons/metalswap-synthetic-2026-09-14-07-30-00z.json";
 
 export const dynamic = "force-static";
 
 const CASES = {
+  [liveCase.case_id]: liveCase,
   [realCase.case_id]: realCase,
   [syntheticCase.case_id]: syntheticCase,
 } as const;
@@ -69,6 +71,7 @@ export default async function ComparisonProofPage({ params }: { params: Promise<
   const silverCross = BigInt(silver.closing.price_fixed) * BigInt(gold.opening.price_fixed);
   const winner = goldCross === silverCross ? "REFUND" : goldCross > silverCross ? "GOLD" : "SILVER";
   const isSynthetic = current.mode === "SYNTHETIC_DEMO";
+  const isLive = current.mode === "LIVE_INTERVAL";
   const settlement = current.settlement;
 
   return (
@@ -81,12 +84,12 @@ export default async function ComparisonProofPage({ params }: { params: Promise<
 
         <header className="comparison-hero">
           <div>
-            <span className="comparison-kicker">{isSynthetic ? "COMPLETED MARKET" : "SOURCE COMPARISON"}</span>
-            <h1>{isSynthetic ? "Gold vs Silver settlement proof" : "Gold vs Silver real-observation replay"}</h1>
+            <span className="comparison-kicker">{isSynthetic || isLive ? "COMPLETED MARKET" : "SOURCE COMPARISON"}</span>
+            <h1>{isSynthetic ? "Gold vs Silver settlement proof" : isLive ? "Gold vs Silver live-interval proof" : "Gold vs Silver real-observation replay"}</h1>
             <p>{current.note}</p>
           </div>
           <span className={`comparison-mode ${isSynthetic ? "synthetic" : "historical"}`}>
-            {isSynthetic ? "SYNTHETIC DEMO" : "HISTORICAL REPLAY"}
+            {isSynthetic ? "SYNTHETIC DEMO" : isLive ? "INDICATIVE LIVE INTERVAL" : "HISTORICAL REPLAY"}
           </span>
         </header>
 
@@ -125,7 +128,7 @@ export default async function ComparisonProofPage({ params }: { params: Promise<
           <div className="comparison-card-heading"><div><span className="comparison-kicker">MARKET / FINALITY</span><h2>{settlement ? "On-chain mechanics proof" : "Comparison-only replay"}</h2></div></div>
           {settlement ? <>
             <div className="comparison-grid"><div><small>POOL</small><strong>{settlement.pool} demo credits</strong></div><div><small>FEE / DISTRIBUTABLE</small><strong>{settlement.fee} / {settlement.distributable_pool} credits</strong></div><div><small>GATE</small><strong>{settlement.gate_finalized ? "FINALIZED" : "NOT FINALIZED"}</strong></div><div><small>PAYOUT</small><strong>{settlement.payout} credits · {settlement.payout_side}</strong></div></div>
-            <div className="receipt-list"><span>Settlement <a href={explorerUrl(settlement.settlement_receipt)} target="_blank" rel="noreferrer">{settlement.settlement_receipt} ↗</a></span><span>Payout <a href={explorerUrl(settlement.payout_receipt)} target="_blank" rel="noreferrer">{settlement.payout_receipt} ↗</a></span><span>Duplicate claim rejected <a href={explorerUrl(settlement.duplicate_claim_receipt)} target="_blank" rel="noreferrer">{settlement.duplicate_claim_receipt} ↗</a></span></div>
+            <div className="receipt-list"><span>Settlement <a href={explorerUrl(settlement.settlement_receipt)} target="_blank" rel="noreferrer">{settlement.settlement_receipt} ↗</a></span>{"gate_receipt" in settlement ? <span>Gate acknowledgment <a href={explorerUrl(settlement.gate_receipt)} target="_blank" rel="noreferrer">{settlement.gate_receipt} ↗</a></span> : null}<span>Payout <a href={explorerUrl(settlement.payout_receipt)} target="_blank" rel="noreferrer">{settlement.payout_receipt} ↗</a></span><span>Duplicate claim rejected <a href={explorerUrl(settlement.duplicate_claim_receipt)} target="_blank" rel="noreferrer">{settlement.duplicate_claim_receipt} ↗</a></span>{"rotation_receipt" in settlement ? <span>Rotation / historical access <a href={explorerUrl(settlement.rotation_receipt)} target="_blank" rel="noreferrer">{settlement.rotation_receipt} ↗</a></span> : null}</div>
             <p className="comparison-muted">Gate finalized at {settlement.gate_finalized_at}. Duplicate claim result: <code>{settlement.duplicate_claim_error}</code>. Contract source revision: <code>{settlement.source_revision}</code>.</p>
           </> : <p className="comparison-muted">This replay intentionally has no pool, fee, payout, or finality state. It is a wallet-free comparison case only; it must not be presented as a wager or settlement.</p>}
         </section>

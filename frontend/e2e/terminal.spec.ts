@@ -58,3 +58,13 @@ test("wallet-free XAUS replay shows real source references without presenting a 
   await expect(page.getByText("XAUUSD", { exact: true })).toBeVisible();
   await expect(page.getByText("XAGUSD", { exact: true })).toBeVisible();
 });
+
+test("wallet-free live XAUS case exposes observations, finality, and claims", async ({ page }) => {
+  await page.goto("/comparison/xaus-live-2026-09-16-12-15-00z");
+  await expect(page.getByRole("heading", { name: "Gold vs Silver live-interval proof" })).toBeVisible();
+  await expect(page.getByText("INDICATIVE LIVE INTERVAL")).toBeVisible();
+  await expect(page.getByText("SILVER outperformed")).toBeVisible();
+  await expect(page.getByText("FINALIZED", { exact: true })).toBeVisible();
+  await expect(page.getByText("Gate acknowledgment", { exact: false })).toBeVisible();
+  await expect(page.getByText("Rotation / historical access", { exact: false })).toBeVisible();
+});
