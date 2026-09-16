@@ -6,6 +6,7 @@ Captured from authorized GenLayer StudioNet test accounts on 2026-09-16. The cur
 
 - App: [metal-swap.vercel.app](https://metal-swap.vercel.app)
 - Repository: [github.com/JWattjr/metalswap](https://github.com/JWattjr/metalswap)
+- Production build: [Vercel deployment `dpl_7Wq3FRUYZzqDQfYpwJxjLiy7dEbo`](https://vercel.com/wattxs-projects/metal-swap/7Wq3FRUYZzqDQfYpwJxjLiy7dEbo), release package `b4e5d7bc8bf7ebba781052c507a50eb5c1ff1270`
 - Completed XAUS market: [wallet-free proof](https://metal-swap.vercel.app/comparison/xaus-live-2026-09-16-12-15-00z)
 - Archived XAUS replay: [comparison proof](https://metal-swap.vercel.app/comparison/xaus-2026-09-14-09-00-00z)
 - Preserved synthetic proof: [completed market](https://metal-swap.vercel.app/comparison/metalswap-synthetic-2026-09-14-07-30-00z)

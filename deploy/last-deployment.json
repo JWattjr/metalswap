@@ -5,6 +5,16 @@
   "sourceRevisionFull": "f21a67be03e7d40dd68cff63a38de1f31d3ad2e1",
   "sourceMode": "XAUS_INDICATIVE_HISTORICAL_REPLAY",
   "sourceBaseUrl": "https://xaus.com/api/v1/intraday",
+  "publicDeployment": {
+    "productionUrl": "https://metal-swap.vercel.app",
+    "proofUrl": "https://metal-swap.vercel.app/comparison/xaus-live-2026-09-16-12-15-00z",
+    "deploymentUrl": "https://metal-swap-8u4t3b4sv-wattxs-projects.vercel.app",
+    "deploymentId": "dpl_7Wq3FRUYZzqDQfYpwJxjLiy7dEbo",
+    "inspectorUrl": "https://vercel.com/wattxs-projects/metal-swap/7Wq3FRUYZzqDQfYpwJxjLiy7dEbo",
+    "readyState": "READY",
+    "releasePackageRevision": "b4e5d7bc8bf7ebba781052c507a50eb5c1ff1270",
+    "verifiedHttpStatus": 200
+  },
   "settlementGateAddress": "0x5b00b98fa2a530E1b0E676b96A2FEC74012AFb20",
   "metalSwapAddress": "0x3D5ccf7e160031EC049c52815283269b95D8DbD7",
   "marketOpenTransaction": "0xe12ce5414d07c8c02cb328bc2853302d026cec81fb894b2ec124af8e32dc03e0",
