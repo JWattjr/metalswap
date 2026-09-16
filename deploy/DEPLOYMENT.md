@@ -74,6 +74,8 @@ The earlier [synthetic proof](https://metal-swap.vercel.app/comparison/metalswap
 
 Arithmetic is contract code; no LLM compares prices. The hosted proof JSON is for human audit and is not contract evidence.
 
+Market opening and rotation remain owner-operated. The documented runbook is: open with preparation time before a UTC quarter-hour, stop entry at cutoff, request settlement promptly after expiry, wait for matching gate finality, then rotate; retry unresolved evidence only within the frozen bounds, and invoke the identical fee-free refund path after deadline. This is an explicit prototype operating dependency, not an automated keeper claim.
+
 ## Checks and limits
 
 - Direct focused suite: `28 passed`.

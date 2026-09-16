@@ -67,4 +67,5 @@ test("wallet-free live XAUS case exposes observations, finality, and claims", as
   await expect(page.getByText("FINALIZED", { exact: true })).toBeVisible();
   await expect(page.getByText("Gate acknowledgment", { exact: false })).toBeVisible();
   await expect(page.getByText("Rotation / historical access", { exact: false })).toBeVisible();
+  await expect(page.getByText("Historical position readback after rotation", { exact: false })).toContainText("AVAILABLE");
 });

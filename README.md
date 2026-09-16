@@ -72,6 +72,10 @@ The validators fetch both source responses independently. The contract accepts a
 
 The market contract never performs arithmetic with an LLM. The non-deterministic boundary is evidence retrieval and agreement; the outcome, fee, pool conservation, and payout math are deterministic contract code.
 
+### Owner-operated rotation runbook
+
+Market opening remains deliberately owner-only; there is no keeper or permissionless rotation path in this prototype. The operator checks that the current market is no longer open, requests settlement promptly after expiry, waits for the matching finalized gate acknowledgment, and then calls `open_next_market` with enough lead time before the next UTC quarter-hour. If valid evidence cannot reach consensus, the operator retries only within the bounded attempt/deadline policy. After the frozen deadline, either settlement or refund entry produces the same fee-free refund without fetching evidence. The public UI labels opening as operator-controlled, while settlement, refunds, claims, and historical reads remain available to non-owner users as permitted by contract state.
+
 ## Run locally
 
 From this directory:
