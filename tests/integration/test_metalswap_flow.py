@@ -1,13 +1,15 @@
 """Two-contract GenLayer integration coverage.
 
-Run with a live GLSim/Studio network and an HTTPS evidence origin:
+Run with a live GLSim/Studio network and the exact XAUS evidence origin:
 
-    $env:METALSWAP_INTEGRATION_SOURCE_BASE_URL = "https://<host>/evidence/"
+    $env:METALSWAP_INTEGRATION_SOURCE_BASE_URL = "https://xaus.com/api/v1/intraday"
     gltest tests/integration/test_metalswap_flow.py -v -s
 
 The tests intentionally deploy fresh contracts so they cannot mutate the
 production deployment. A complete finalized settlement test should be run
-against a disposable source fixture after the market interval has elapsed.
+against XAUS only after both instrument requests pass preflight. An HTTPS
+fixture directory remains useful for synthetic lifecycle testing, but it does
+not prove independent real-price retrieval.
 """
 
 import os
@@ -69,6 +71,19 @@ def open_test_market(market, source: str) -> str:
     return identifier
 
 
+def distinct_non_owner_accounts(accounts, owner_address: str, count: int = 2):
+    distinct = []
+    seen = {owner_address.lower()}
+    for account in accounts:
+        address = account.address.lower()
+        if address not in seen:
+            distinct.append(account)
+            seen.add(address)
+        if len(distinct) == count:
+            return distinct
+    pytest.skip(f"Live lifecycle requires {count} configured non-owner test accounts.")
+
+
 @pytest.mark.slow
 def test_two_contract_wiring_and_position_submission():
     source = configured_source()
@@ -125,35 +140,39 @@ def test_claim_is_rejected_before_market_settlement():
 
 @pytest.mark.slow
 @pytest.mark.live_demo
-def test_expiry_finality_rotation_and_historical_claim():
+def test_expiry_finality_rotation_and_historical_claim(accounts):
     source = configured_source()
     gate, market = deploy_wired_pair(source)
     identifier = open_test_market(market, source)
-    account = get_default_account()
+    owner = get_default_account()
+    gold_account, silver_account = distinct_non_owner_accounts(accounts, owner.address)
+    gold_market = market.connect(gold_account)
+    silver_market = market.connect(silver_account)
 
-    assert tx_execution_succeeded(market.claim_demo_credits(args=[]).transact())
-    assert tx_execution_succeeded(market.place_position(args=[identifier, "GOLD", 25]).transact())
-    assert tx_execution_succeeded(market.place_position(args=[identifier, "SILVER", 25]).transact())
+    assert tx_execution_succeeded(gold_market.claim_demo_credits(args=[]).transact())
+    assert tx_execution_succeeded(silver_market.claim_demo_credits(args=[]).transact())
+    assert tx_execution_succeeded(gold_market.place_position(args=[identifier, "GOLD", 25]).transact())
+    assert tx_execution_succeeded(silver_market.place_position(args=[identifier, "SILVER", 25]).transact())
 
     detail = market.get_market(args=[identifier]).call()
     end_at = datetime.fromisoformat(detail["end_at"].replace("Z", "+00:00"))
     while datetime.now(timezone.utc) < end_at + timedelta(seconds=5):
         time.sleep(min(30, max(1, int((end_at + timedelta(seconds=5) - datetime.now(timezone.utc)).total_seconds()))))
 
-    settlement_receipt = market.request_settlement(args=[identifier]).transact()
+    settlement_receipt = gold_market.request_settlement(args=[identifier]).transact()
     assert tx_execution_succeeded(settlement_receipt)
 
     settled = market.get_market(args=[identifier]).call()
     assert settled["outcome"] in ("GOLD", "SILVER", "REFUND")
     assert settled["evidence_hash"].startswith("sha256:")
     attempts = settled["settlement_attempts"]
-    repeat_receipt = market.request_settlement(args=[identifier]).transact()
+    repeat_receipt = silver_market.request_settlement(args=[identifier]).transact()
     assert tx_execution_succeeded(repeat_receipt)
     assert market.get_market(args=[identifier]).call()["settlement_attempts"] == attempts
 
     finality = gate.get_finality(args=[identifier]).call()
     if not finality.get("finalized"):
-        retry_receipt = market.retry_finality(args=[identifier]).transact()
+        retry_receipt = gold_market.retry_finality(args=[identifier]).transact()
         assert tx_execution_succeeded(retry_receipt)
         for _ in range(12):
             finality = gate.get_finality(args=[identifier]).call()
@@ -165,15 +184,19 @@ def test_expiry_finality_rotation_and_historical_claim():
 
     outcome = market.get_market(args=[identifier]).call()["outcome"]
     winning_side = outcome if outcome in ("GOLD", "SILVER") else "GOLD"
+    winning_account = gold_account if winning_side == "GOLD" else silver_account
+    winning_market = market.connect(winning_account)
 
     rotated_identifier = open_test_market(market, source)
     assert rotated_identifier != identifier
 
-    claim_receipt = market.claim_position(args=[identifier, winning_side]).transact()
+    claim_receipt = winning_market.claim_position(args=[identifier, winning_side]).transact()
     assert tx_execution_succeeded(claim_receipt)
-    historical_position = market.get_position(args=[identifier, account.address, winning_side]).call()
+    historical_position = market.get_position(
+        args=[identifier, winning_account.address, winning_side]
+    ).call()
     assert historical_position["claimed"] is True
     assert historical_position["payout"] > 0
 
-    duplicate_claim = market.claim_position(args=[identifier, winning_side]).transact()
+    duplicate_claim = winning_market.claim_position(args=[identifier, winning_side]).transact()
     assert not tx_execution_succeeded(duplicate_claim)

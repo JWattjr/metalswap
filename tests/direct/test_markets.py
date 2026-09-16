@@ -246,7 +246,7 @@ def test_excessive_evidence_body_and_numeric_value_are_rejected(
     fund_and_stake(market, direct_vm, direct_alice, first, "GOLD", 100)
     direct_vm.mock_web(
         rf".*{first}\.json$",
-        {"status": 200, "body": "x" * (64 * 1_024 + 1)},
+        {"status": 200, "body": "x" * (96 * 1_024 + 1)},
     )
     direct_vm.warp("2025-01-01T00:30:00Z")
     direct_vm.sender = direct_alice

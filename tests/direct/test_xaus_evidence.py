@@ -20,7 +20,15 @@ def point(timestamp: str, price: str):
     return {"t": epoch(timestamp), "p": price}
 
 
-def series(symbol: str, points: list[dict], *, response_symbol: str | None = None, unit: str = "troy_oz", state: str = "fresh"):
+def series(
+    symbol: str,
+    points: list[dict],
+    *,
+    response_symbol: str | None = None,
+    unit: str = "troy_oz",
+    state: str = "fresh",
+    as_of: str = "2025-01-01T00:30:00Z",
+):
     return {
         "symbol": response_symbol or symbol,
         "hours": 48,
@@ -29,21 +37,30 @@ def series(symbol: str, points: list[dict], *, response_symbol: str | None = Non
         "interval_seconds": 120,
         "points": points,
         "coverage_seconds": 4_000,
-        "data_state": {"status": state, "source": "sampler", "as_of": "2025-01-01T00:30:00Z", "age_seconds": 0},
+        "data_state": {"status": state, "source": "sampler", "as_of": as_of, "age_seconds": 0},
     }
 
 
-def full_series(symbol: str, base_price_fixed: int, step_fixed: int, *, tail_shift: int = 0):
-    """Build a complete 48-hour, two-minute XAUS-sized response."""
-    start = datetime(2024, 12, 31, 12, 30, 2, tzinfo=timezone.utc)
+def full_series(
+    symbol: str,
+    base_price_fixed: int,
+    step_fixed: int,
+    *,
+    tail_shift: int = 0,
+    selected_close_shift: int = 0,
+):
+    """Build a complete 48-hour response ending just before settlement."""
+    start = datetime(2024, 12, 30, 0, 36, 2, tzinfo=timezone.utc)
     points = []
     for index in range(1_440):
         timestamp = int((start + timedelta(seconds=index * 120)).timestamp())
         price_fixed = base_price_fixed + (index * step_fixed)
-        if index >= 1_400:
+        if index >= 1_438:
             price_fixed += tail_shift
+        if index == 1_436:
+            price_fixed += selected_close_shift
         points.append({"t": timestamp, "p": f"{price_fixed / 1_000_000:.6f}"})
-    payload = series(symbol, points)
+    payload = series(symbol, points, as_of="2025-01-01T00:35:00Z")
     payload["coverage_seconds"] = 172_680
     return payload
 
@@ -238,7 +255,7 @@ def test_xaus_run_nondet_validator_converges_on_full_series_with_moving_tail(
 
     leader_gold = full_series("xau", 2_000_000_000, 10_000, tail_shift=0)
     leader_silver = full_series("xag", 25_000_000, 100, tail_shift=0)
-    assert 16_384 < len(json.dumps(leader_gold).encode("utf-8")) <= 64 * 1_024
+    assert 16_384 < len(json.dumps(leader_gold).encode("utf-8")) <= 96 * 1_024
     direct_vm.mock_web(
         r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xau$",
         {"status": 200, "body": json.dumps(leader_gold)},
@@ -247,7 +264,7 @@ def test_xaus_run_nondet_validator_converges_on_full_series_with_moving_tail(
         r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xag$",
         {"status": 200, "body": json.dumps(leader_silver)},
     )
-    direct_vm.warp("2025-01-01T00:30:00Z")
+    direct_vm.warp("2025-01-01T00:35:00Z")
     direct_vm.sender = direct_alice
     xaus_market_contract.request_settlement(identifier)
 
@@ -268,3 +285,41 @@ def test_xaus_run_nondet_validator_converges_on_full_series_with_moving_tail(
     assert detail["outcome"] == "GOLD"
     assert detail["gold_opening_timestamp"] == "2025-01-01T00:14:02Z"
     assert detail["gold_closing_timestamp"] == "2025-01-01T00:28:02Z"
+
+
+def test_xaus_run_nondet_validator_rejects_changed_selected_boundary_point(
+    xaus_market_contract, direct_vm, direct_alice, direct_bob
+):
+    """Reject a full-size validator response that changes a selected point."""
+    identifier = open_xaus_market(xaus_market_contract, direct_vm)
+    fund_and_stake(xaus_market_contract, direct_vm, direct_alice, identifier, "GOLD", 100)
+    fund_and_stake(xaus_market_contract, direct_vm, direct_bob, identifier, "SILVER", 100)
+
+    direct_vm.mock_web(
+        r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xau$",
+        {"status": 200, "body": json.dumps(full_series("xau", 2_000_000_000, 10_000))},
+    )
+    direct_vm.mock_web(
+        r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xag$",
+        {"status": 200, "body": json.dumps(full_series("xag", 25_000_000, 100))},
+    )
+    direct_vm.warp("2025-01-01T00:35:00Z")
+    direct_vm.sender = direct_alice
+    xaus_market_contract.request_settlement(identifier)
+
+    direct_vm.clear_mocks()
+    direct_vm.mock_web(
+        r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xau$",
+        {
+            "status": 200,
+            "body": json.dumps(
+                full_series("xau", 2_000_000_000, 10_000, selected_close_shift=777)
+            ),
+        },
+    )
+    direct_vm.mock_web(
+        r"^https://xaus\.com/api/v1/intraday\?hours=48&symbol=xag$",
+        {"status": 200, "body": json.dumps(full_series("xag", 25_000_000, 100))},
+    )
+
+    assert direct_vm.run_validator() is False

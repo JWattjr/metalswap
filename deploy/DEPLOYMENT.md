@@ -72,7 +72,7 @@ Case: [market-2026-09-14T07:30:00Z evidence](https://metal-swap.vercel.app/evide
 ## What validators actually verify
 
 - The owner-only frozen source and exact market evidence URL.
-- Successful 2xx transport, non-empty UTF-8 body no larger than 64 KiB, valid JSON, at most 1,500 points, exact symbols/currency/unit/hours/interval, fresh sampler state, ordered timestamps, positive six-decimal prices, and bounded coverage. The larger bound admits the complete 48-hour, two-minute XAUS window while remaining explicitly bounded.
+- Successful 2xx transport, non-empty UTF-8 body no larger than 96 KiB, valid JSON, at most 1,500 points, exact symbols/currency/unit/hours/interval, fresh sampler state, ordered timestamps, positive six-decimal prices, and bounded coverage. The 2026-09-16 preflight returned 91 points per metal in roughly 3 KiB; the byte ceiling remains conservative because a maximum-size live payload has not been captured.
 - Latest-at-or-before boundary selection, maximum `180s` boundary gap, maximum `60s` cross-metal timestamp skew, recomputed gap/skew fields, and canonical SHA-256 payload matching.
 - Independent `xau` and `xag` reads by leader and validator; disagreement, missing data, malformed data, or source failure remains pending.
 - Snapshot ordinary values before consensus closures; no `self` or storage-backed Market object is captured.
@@ -80,7 +80,7 @@ Case: [market-2026-09-14T07:30:00Z evidence](https://metal-swap.vercel.app/evide
 
 ## Test and readiness status
 
-- Direct focused regression suite: `27 passed`.
+- Direct focused regression suite: `28 passed`.
 - Contract lint, validation, typecheck, and schema checks: passed.
 - Frontend typecheck, production build, and Playwright browser suite: passed (`6 passed`).
 - Live synthetic behavior: expiry, settlement, finality gate, 49-credit payout, duplicate rejection, rotation, and old-position readback observed on StudioNet.

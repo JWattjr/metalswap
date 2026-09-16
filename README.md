@@ -56,7 +56,7 @@ The source identity and policy are frozen before entry:
 - Maximum cross-metal timestamp skew: 60 seconds at each boundary.
 - Missing, stale, malformed, conflicting, wrong-unit, wrong-instrument, non-2xx, truncated, or oversized evidence stays pending and can only reach the fee-free deadline refund.
 
-The validators fetch both source responses independently. The contract accepts a bounded UTF-8 JSON body (64 KiB) and at most 1,500 points, enough for the complete 48-hour/two-minute window without accepting unbounded content. The hosted comparison JSON is proof material for people; it is not used as contract evidence. See [`docs/DATA_FEASIBILITY.md`](docs/DATA_FEASIBILITY.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+The validators fetch both source responses independently. The contract accepts a bounded UTF-8 JSON body (96 KiB) and at most 1,500 points. The byte ceiling gives conservative headroom for the expected response shape while the point and schema limits remain independently enforced. A 2026-09-16 live preflight returned 91 points per metal in roughly 3 KiB; a maximum-size live response has not been captured, so the full-envelope fit is not claimed as empirical proof. The hosted comparison JSON is proof material for people; it is not used as contract evidence. See [`docs/DATA_FEASIBILITY.md`](docs/DATA_FEASIBILITY.md) and [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 ## Contract lifecycle
 
